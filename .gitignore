@@ -1,0 +1,39 @@
+/.vs
+/SimpleGame/x64
+/Debug
+/Release
+/x64
+
+# Visual Studio / build outputs
+*.exe
+*.ilk
+*.pdb
+*.obj
+*.log
+*.pch
+*.idb
+*.tlog
+*.lastbuildstate
+*.suo
+*.db
+*.user
+*.userosscache
+*.sln.docstates
+
+# Environment variables and local secrets
+.env
+.env.*
+*.env
+*.secret
+*.secrets
+secrets.*
+credentials.*
+
+# Private keys and certificates
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+
