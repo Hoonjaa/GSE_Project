@@ -1,196 +1,396 @@
 #include "stdafx.h"
 #include "Renderer.h"
+#include <cmath>
+#include <cstddef>
+#include <fstream>
+#include <iterator>
+#include <iostream>
+#include <map>
+#include <limits>
+#include <algorithm>
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
 
-Renderer::Renderer(int windowSizeX, int windowSizeY)
+// Rasterize Windows Korean glyphs once, then draw their cached coverage in OpenGL.
+// The bounded atlas can be recycled after pending vertices have been flushed.
+struct FontAtlas
 {
-	Initialize(windowSizeX, windowSizeY);
+    enum { Size = 1024, Cell = 64, Columns = Size / Cell, Capacity = Columns * Columns };
+    struct Glyph
+    {
+        float advance = 0, left = 0, top = 0, width = 0, height = 0;
+        float u = 0, v = 0, U = 0, V = 0;
+    };
+    HDC dc = nullptr;
+    HFONT font = nullptr;
+    HGDIOBJ previousFont = nullptr;
+    GLuint texture = 0;
+    int ascent = 28;
+    std::map<wchar_t, Glyph> glyphs;
+
+    FontAtlas()
+    {
+        dc = CreateCompatibleDC(nullptr);
+        if (!dc) return;
+        font = CreateFontW(-28, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            HANGEUL_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
+            DEFAULT_PITCH | FF_DONTCARE, L"Malgun Gothic");
+        if (!font) return;
+        previousFont = SelectObject(dc, font);
+        if (!previousFont || previousFont == HGDI_ERROR) return;
+        TEXTMETRICW metrics = {};
+        if (!GetTextMetricsW(dc, &metrics)) return;
+        ascent = metrics.tmAscent;
+        // Detect absent Korean coverage instead of silently displaying empty boxes.
+        WORD index = 0xffff;
+        if (GetGlyphIndicesW(dc, L"ê°€", 1, &index, GGI_MARK_NONEXISTING_GLYPHS) == GDI_ERROR ||
+            index == 0xffff) return;
+        glGenTextures(1, &texture);
+        if (!texture) return;
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        Reset();
+    }
+    ~FontAtlas()
+    {
+        if (texture) glDeleteTextures(1, &texture);
+        if (dc && previousFont && previousFont != HGDI_ERROR) SelectObject(dc, previousFont);
+        if (font) DeleteObject(font);
+        if (dc) DeleteDC(dc);
+    }
+    void Reset()
+    {
+        glyphs.clear();
+        std::vector<unsigned char> empty(Size * Size, 0);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, Size, Size, 0, GL_RED, GL_UNSIGNED_BYTE, empty.data());
+    }
+    bool Full(wchar_t ch) const
+    {
+        return glyphs.size() >= Capacity && glyphs.find(ch) == glyphs.end();
+    }
+    Glyph Get(wchar_t ch)
+    {
+        auto found = glyphs.find(ch);
+        if (found != glyphs.end()) return found->second;
+        const MAT2 identity = {{0, 1}, {0, 0}, {0, 0}, {0, 1}};
+        GLYPHMETRICS metrics = {};
+        DWORD count = GetGlyphOutlineW(dc, ch, GGO_GRAY8_BITMAP, &metrics, 0, nullptr, &identity);
+        if (count == GDI_ERROR || metrics.gmBlackBoxX > Cell - 2 || metrics.gmBlackBoxY > Cell - 2) {
+            if (ch != L'?') return Get(L'?');
+            Glyph missing;
+            missing.advance = 28;
+            return missing;
+        }
+        std::vector<unsigned char> pixels(Cell * Cell, 0);
+        if (count > 0) {
+            std::vector<unsigned char> bitmap(count);
+            if (GetGlyphOutlineW(dc, ch, GGO_GRAY8_BITMAP, &metrics, count, bitmap.data(), &identity) == GDI_ERROR)
+                return ch != L'?' ? Get(L'?') : Glyph{};
+            const DWORD stride = (metrics.gmBlackBoxX + 3) & ~3u;
+            for (DWORD y = 0; y < metrics.gmBlackBoxY; ++y)
+                for (DWORD x = 0; x < metrics.gmBlackBoxX; ++x)
+                    pixels[(y + 1) * Cell + x + 1] = static_cast<unsigned char>(
+                        (std::min)(255u, static_cast<unsigned int>(bitmap[y * stride + x]) * 255u / 64u));
+        }
+        const int slot = static_cast<int>(glyphs.size());
+        const int x = slot % Columns * Cell, y = slot / Columns * Cell;
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, Cell, Cell, GL_RED, GL_UNSIGNED_BYTE, pixels.data());
+        Glyph glyph;
+        glyph.advance = static_cast<float>(metrics.gmCellIncX);
+        glyph.left = static_cast<float>(metrics.gmptGlyphOrigin.x);
+        glyph.top = static_cast<float>(ascent - metrics.gmptGlyphOrigin.y);
+        glyph.width = static_cast<float>(metrics.gmBlackBoxX);
+        glyph.height = static_cast<float>(metrics.gmBlackBoxY);
+        glyph.u = (x + 1.f) / Size; glyph.v = (y + 1.f) / Size;
+        glyph.U = (x + 1.f + glyph.width) / Size; glyph.V = (y + 1.f + glyph.height) / Size;
+        glyphs.emplace(ch, glyph);
+        return glyph;
+    }
+};
+
+namespace
+{
+    constexpr float Pi = 3.14159265359f;
+    Color Shade(Color c, float s) { return {c.r*s, c.g*s, c.b*s}; }
+    std::string ShaderSource(const wchar_t* name)
+    {
+        wchar_t executable[MAX_PATH] = {};
+        const DWORD length = GetModuleFileNameW(nullptr, executable, MAX_PATH);
+        if (!length || length >= MAX_PATH) return {};
+        const std::wstring path(executable, length);
+        const auto folder = path.substr(0, path.find_last_of(L"/\\") + 1);
+        const std::wstring shaderPath=folder + L"Shaders\\" + name;
+        std::ifstream file(shaderPath.c_str(), std::ios::binary);
+        if (!file) {
+            std::cerr << "Shader file missing beside executable. Rebuild to copy Shaders.\n";
+            return {};
+        }
+        return std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+    }
+    GLuint Compile(GLenum type, const std::string& source)
+    {
+        if (source.empty()) return 0;
+        GLuint shader = glCreateShader(type);
+        if (!shader) return 0;
+        const char* text = source.c_str();
+        glShaderSource(shader, 1, &text, nullptr);
+        glCompileShader(shader);
+        GLint success = GL_FALSE;
+        glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+        if (!success) {
+            char log[4096] = {};
+            glGetShaderInfoLog(shader, sizeof(log), nullptr, log);
+            std::cerr << log << '\n';
+            glDeleteShader(shader);
+            return 0;
+        }
+        return shader;
+    }
+
+    GLuint LoadProgram(const wchar_t* vertexFile, const wchar_t* fragmentFile)
+    {
+        const GLuint vs = Compile(GL_VERTEX_SHADER, ShaderSource(vertexFile));
+        const GLuint fs = Compile(GL_FRAGMENT_SHADER, ShaderSource(fragmentFile));
+        GLuint result = 0;
+        if (vs && fs) {
+            GLuint program = glCreateProgram();
+            if (program) {
+                glAttachShader(program, vs); glAttachShader(program, fs);
+                glLinkProgram(program);
+                GLint success = GL_FALSE;
+                glGetProgramiv(program, GL_LINK_STATUS, &success);
+                if (success) result = program;
+                else {
+                    char log[4096] = {};
+                    glGetProgramInfoLog(program, sizeof(log), nullptr, log);
+                    std::cerr << log << '\n';
+                    glDeleteProgram(program);
+                }
+            }
+        }
+        if (vs) glDeleteShader(vs);
+        if (fs) glDeleteShader(fs);
+        return result;
+    }
+
+    float LinearColor(float value)
+    {
+        return value <= .04045f ? value / 12.92f : std::pow((value + .055f) / 1.055f, 2.4f);
+    }
+
 }
 
+namespace Geometry
+{
+    void Triangle(Mesh& m, Vec3 a, Vec3 b, Vec3 c, Color col)
+    { m.push_back({a,col}); m.push_back({b,col}); m.push_back({c,col}); }
+    void Quad(Mesh& m, Vec3 a, Vec3 b, Vec3 c, Vec3 d, Color col)
+    { Triangle(m,a,b,c,col); Triangle(m,a,c,d,col); }
+    void Box(Mesh& m, Vec3 p, Vec3 s, Color c)
+    {
+        float x=p.x, y=p.y, z=p.z, X=x+s.x, Y=y+s.y, Z=z+s.z;
+        Quad(m,{x,Y,z},{X,Y,z},{X,Y,Z},{x,Y,Z},c);
+        Quad(m,{x,y,z},{X,y,z},{X,Y,z},{x,Y,z},Shade(c,.72f));
+        Quad(m,{x,y,Z},{X,y,Z},{X,Y,Z},{x,Y,Z},Shade(c,.88f));
+        Quad(m,{x,y,z},{x,y,Z},{x,Y,Z},{x,Y,z},Shade(c,.65f));
+        Quad(m,{X,y,z},{X,y,Z},{X,Y,Z},{X,Y,z},Shade(c,.8f));
+    }
+    void Cone(Mesh& m, Vec3 p, float r, float h, Color c, int sides)
+    {
+        for (int i=0;i<sides;++i) {
+            float a=2*Pi*i/sides, b=2*Pi*(i+1)/sides;
+            Triangle(m,{p.x+r*std::cos(a),p.y,p.z+r*std::sin(a)},
+                {p.x,p.y+h,p.z},{p.x+r*std::cos(b),p.y,p.z+r*std::sin(b)},
+                Shade(c,.75f+.25f*(.5f+.5f*std::cos(a))));
+        }
+    }
+    void Disc(Mesh& m, Vec3 p, float r, Color c, int sides)
+    {
+        for (int i=0;i<sides;++i) {
+            float a=2*Pi*i/sides, b=2*Pi*(i+1)/sides;
+            Triangle(m,p,{p.x+r*std::cos(a),p.y,p.z+r*std::sin(a)},
+                {p.x+r*std::cos(b),p.y,p.z+r*std::sin(b)},c);
+        }
+    }
+}
 
+Renderer::Renderer(int w,int h):m_width(w),m_height(h)
+{
+    m_program=LoadProgram(L"SolidRect.vs",L"SolidRect.fs");
+    if (!m_program) return;
+    glGenVertexArrays(1,&m_vao); glGenBuffers(1,&m_vbo);
+    glBindVertexArray(m_vao); glBindBuffer(GL_ARRAY_BUFFER,m_vbo);
+    glEnableVertexAttribArray(0); glEnableVertexAttribArray(1);
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,sizeof(Vertex),reinterpret_cast<void*>(offsetof(Vertex,position)));
+    glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,sizeof(Vertex),reinterpret_cast<void*>(offsetof(Vertex,color)));
+    glVertexAttribPointer(2,2,GL_FLOAT,GL_FALSE,sizeof(Vertex),reinterpret_cast<void*>(offsetof(Vertex,uv)));
+    m_font.reset(new FontAtlas());
+    m_fontReady = m_font->texture != 0;
+    if (!m_fontReady) std::cerr << "Korean font initialization failed. Install the Windows Malgun Gothic font.\n";
+    glUseProgram(m_program);
+    glUniform1i(glGetUniformLocation(m_program, "u_Font"), 0);
+    m_post.reset(new PostProcessing(LoadProgram(L"PostProcess.vs", L"PostProcess.fs"),
+        LoadProgram(L"PostProcess.vs", L"Blur.fs")));
+    glUseProgram(m_program);
+    m_batch.reserve(300000);
+    Resize(w,h);
+}
 Renderer::~Renderer()
 {
+    m_font.reset();
+    m_post.reset();
+    if (m_vbo) glDeleteBuffers(1,&m_vbo);
+    if (m_vao) glDeleteVertexArrays(1,&m_vao);
+    if (m_program) glDeleteProgram(m_program);
 }
-
-void Renderer::Initialize(int windowSizeX, int windowSizeY)
+void Renderer::Resize(int w,int h)
 {
-	//Set window size
-	m_WindowSizeX = windowSizeX;
-	m_WindowSizeY = windowSizeY;
-
-	//Load shaders
-	m_SolidRectShader = CompileShaders("./Shaders/SolidRect.vs", "./Shaders/SolidRect.fs");
-	
-	//Create VBOs
-	CreateVertexBufferObjects();
-
-	if (m_SolidRectShader > 0 && m_VBORect > 0)
-	{
-		m_Initialized = true;
-	}
+    m_width=w>0?w:1; m_height=h>0?h:1;
+    if (m_post) m_post->Resize(m_width,m_height);
+    glViewport(0,0,m_width,m_height);
 }
-
-bool Renderer::IsInitialized()
+void Renderer::SetPostProcessing(const PostProcessingSettings& settings)
 {
-	return m_Initialized;
+    m_postSettings=settings;
+    auto bounded=[](float value,float fallback,float low,float high) {
+        if (!std::isfinite(value)) value=fallback;
+        return (std::max)(low,(std::min)(high,value));
+    };
+    m_postSettings.exposure=bounded(settings.exposure,1.f,.1f,4.f);
+    m_postSettings.sceneIntensity=bounded(settings.sceneIntensity,2.f,.1f,8.f);
+    m_postSettings.vignetteStrength=bounded(settings.vignetteStrength,.24f,0.f,.8f);
+    m_postSettings.blurRadius=bounded(settings.blurRadius,3.f,0.f,12.f);
+    m_postSettings.blurStrength=bounded(settings.blurStrength,.85f,0.f,1.f);
+    m_postSettings.blurStart=bounded(settings.blurStart,.42f,0.f,.95f);
+    m_postSettings.blurEnd=bounded(settings.blurEnd,.98f,m_postSettings.blurStart+.01f,1.5f);
 }
-
-void Renderer::CreateVertexBufferObjects()
+void Renderer::Begin(float zoom)
 {
-	float rect[]
-		=
-	{
-		-1.f / m_WindowSizeX, -1.f / m_WindowSizeY, 0.f, -1.f / m_WindowSizeX, 1.f / m_WindowSizeY, 0.f, 1.f / m_WindowSizeX, 1.f / m_WindowSizeY, 0.f, //Triangle1
-		-1.f / m_WindowSizeX, -1.f / m_WindowSizeY, 0.f,  1.f / m_WindowSizeX, 1.f / m_WindowSizeY, 0.f, 1.f / m_WindowSizeX, -1.f / m_WindowSizeY, 0.f, //Triangle2
-	};
-
-	glGenBuffers(1, &m_VBORect);
-	glBindBuffer(GL_ARRAY_BUFFER, m_VBORect);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(rect), rect, GL_STATIC_DRAW);
+    m_zoom=zoom; m_batch.clear(); m_triangleCount=0;
+    m_overlay=false;
+    m_hdrScene=m_postSettings.enabled && PostProcessingAvailable();
+    glDisable(GL_FRAMEBUFFER_SRGB);
+    if (m_hdrScene) {
+        m_post->BeginScene();
+        glClearColor(LinearColor(.055f)*m_postSettings.sceneIntensity,
+            LinearColor(.40f)*m_postSettings.sceneIntensity,LinearColor(.51f)*m_postSettings.sceneIntensity,1);
+    } else {
+        glBindFramebuffer(GL_FRAMEBUFFER,0);
+        glViewport(0,0,m_width,m_height);
+        glClearColor(.055f,.40f,.51f,1);
+    }
+    glDepthMask(GL_TRUE);
+    glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LESS);
+    glDisable(GL_CULL_FACE); glDisable(GL_BLEND);
 }
-
-void Renderer::AddShader(GLuint ShaderProgram, const char* pShaderText, GLenum ShaderType)
+void Renderer::Submit(const Mesh& mesh,Vec3 o,float rotation)
 {
-	//½¦ÀÌ´õ ¿ÀºêÁ§Æ® »ý¼º
-	GLuint ShaderObj = glCreateShader(ShaderType);
-
-	if (ShaderObj == 0) {
-		fprintf(stderr, "Error creating shader type %d\n", ShaderType);
-	}
-
-	const GLchar* p[1];
-	p[0] = pShaderText;
-	GLint Lengths[1];
-
-	size_t slen = strlen(pShaderText);
-	if (slen > INT_MAX) {
-		// Handle error
-	}
-	GLint len = (GLint)slen;
-
-	Lengths[0] = len;
-	//½¦ÀÌ´õ ÄÚµå¸¦ ½¦ÀÌ´õ ¿ÀºêÁ§Æ®¿¡ ÇÒ´ç
-	glShaderSource(ShaderObj, 1, p, Lengths);
-
-	//ÇÒ´çµÈ ½¦ÀÌ´õ ÄÚµå¸¦ ÄÄÆÄÀÏ
-	glCompileShader(ShaderObj);
-
-	GLint success;
-	// ShaderObj °¡ ¼º°øÀûÀ¸·Î ÄÄÆÄÀÏ µÇ¾ú´ÂÁö È®ÀÎ
-	glGetShaderiv(ShaderObj, GL_COMPILE_STATUS, &success);
-	if (!success) {
-		GLchar InfoLog[1024];
-
-		//OpenGL ÀÇ shader log µ¥ÀÌÅÍ¸¦ °¡Á®¿È
-		glGetShaderInfoLog(ShaderObj, 1024, NULL, InfoLog);
-		fprintf(stderr, "Error compiling shader type %d: '%s'\n", ShaderType, InfoLog);
-		printf("%s \n", pShaderText);
-	}
-
-	// ShaderProgram ¿¡ attach!!
-	glAttachShader(ShaderProgram, ShaderObj);
+    const float c=std::cos(rotation),s=std::sin(rotation);
+    for (const Vertex& v:mesh) {
+        const float x=v.position.x*c-v.position.z*s+o.x;
+        const float z=v.position.x*s+v.position.z*c+o.z;
+        const float y=v.position.y+o.y;
+        // Orthographic isometric basis. Relative coordinates avoid float drift.
+        Vec3 clip={(x-z)*.70710678f*m_zoom*2/m_width,
+            (y*.81649658f-(x+z)*.40824829f)*m_zoom*2/m_height,
+            -(x+y+z)*.57735027f/2048.f};
+        m_batch.push_back({clip,v.color});
+    }
 }
-
-bool Renderer::ReadFile(char* filename, std::string *target)
+void Renderer::Flush()
 {
-	std::ifstream file(filename);
-	if (file.fail())
-	{
-		std::cout << filename << " file loading failed.. \n";
-		file.close();
-		return false;
-	}
-	std::string line;
-	while (getline(file, line)) {
-		target->append(line.c_str());
-		target->append("\n");
-	}
-	return true;
+    if (m_batch.empty()) return;
+    glUseProgram(m_program);
+    glUniform1i(glGetUniformLocation(m_program, "u_HdrScene"), m_hdrScene && !m_overlay);
+    glUniform1f(glGetUniformLocation(m_program, "u_SceneIntensity"), m_postSettings.sceneIntensity);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, m_font ? m_font->texture : 0);
+    glBindVertexArray(m_vao); glBindBuffer(GL_ARRAY_BUFFER,m_vbo);
+    glBufferData(GL_ARRAY_BUFFER,static_cast<GLsizeiptr>(m_batch.size()*sizeof(Vertex)),m_batch.data(),GL_STREAM_DRAW);
+    glDrawArrays(GL_TRIANGLES,0,static_cast<GLsizei>(m_batch.size()));
+    m_triangleCount+=m_batch.size()/3;
+    m_batch.clear();
 }
-
-GLuint Renderer::CompileShaders(char* filenameVS, char* filenameFS)
+void Renderer::PresentScene()
 {
-	GLuint ShaderProgram = glCreateProgram(); //ºó ½¦ÀÌ´õ ÇÁ·Î±×·¥ »ý¼º
-
-	if (ShaderProgram == 0) { //½¦ÀÌ´õ ÇÁ·Î±×·¥ÀÌ ¸¸µé¾îÁ³´ÂÁö È®ÀÎ
-		fprintf(stderr, "Error creating shader program\n");
-	}
-
-	std::string vs, fs;
-
-	//shader.vs °¡ vs ¾ÈÀ¸·Î ·ÎµùµÊ
-	if (!ReadFile(filenameVS, &vs)) {
-		printf("Error compiling vertex shader\n");
-		return -1;
-	};
-
-	//shader.fs °¡ fs ¾ÈÀ¸·Î ·ÎµùµÊ
-	if (!ReadFile(filenameFS, &fs)) {
-		printf("Error compiling fragment shader\n");
-		return -1;
-	};
-
-	// ShaderProgram ¿¡ vs.c_str() ¹öÅØ½º ½¦ÀÌ´õ¸¦ ÄÄÆÄÀÏÇÑ °á°ú¸¦ attachÇÔ
-	AddShader(ShaderProgram, vs.c_str(), GL_VERTEX_SHADER);
-
-	// ShaderProgram ¿¡ fs.c_str() ÇÁ·¹±×¸ÕÆ® ½¦ÀÌ´õ¸¦ ÄÄÆÄÀÏÇÑ °á°ú¸¦ attachÇÔ
-	AddShader(ShaderProgram, fs.c_str(), GL_FRAGMENT_SHADER);
-
-	GLint Success = 0;
-	GLchar ErrorLog[1024] = { 0 };
-
-	//Attach ¿Ï·áµÈ shaderProgram À» ¸µÅ·ÇÔ
-	glLinkProgram(ShaderProgram);
-
-	//¸µÅ©°¡ ¼º°øÇß´ÂÁö È®ÀÎ
-	glGetProgramiv(ShaderProgram, GL_LINK_STATUS, &Success);
-
-	if (Success == 0) {
-		// shader program ·Î±×¸¦ ¹Þ¾Æ¿È
-		glGetProgramInfoLog(ShaderProgram, sizeof(ErrorLog), NULL, ErrorLog);
-		std::cout << filenameVS << ", " << filenameFS << " Error linking shader program\n" << ErrorLog;
-		return -1;
-	}
-
-	glValidateProgram(ShaderProgram);
-	glGetProgramiv(ShaderProgram, GL_VALIDATE_STATUS, &Success);
-	if (!Success) {
-		glGetProgramInfoLog(ShaderProgram, sizeof(ErrorLog), NULL, ErrorLog);
-		std::cout << filenameVS << ", " << filenameFS << " Error validating shader program\n" << ErrorLog;
-		return -1;
-	}
-
-	glUseProgram(ShaderProgram);
-	std::cout << filenameVS << ", " << filenameFS << " Shader compiling is done.";
-
-	return ShaderProgram;
+    if (m_overlay) return;
+    Flush();
+    if (m_hdrScene) m_post->Composite(m_postSettings);
+    m_overlay=true;
 }
-
-void Renderer::DrawSolidRect(float x, float y, float z, float size, float r, float g, float b, float a)
+void Renderer::BeginOverlay()
 {
-	float newX, newY;
-
-	GetGLPosition(x, y, &newX, &newY);
-
-	//Program select
-	glUseProgram(m_SolidRectShader);
-
-	glUniform4f(glGetUniformLocation(m_SolidRectShader, "u_Trans"), newX, newY, 0, size);
-	glUniform4f(glGetUniformLocation(m_SolidRectShader, "u_Color"), r, g, b, a);
-
-	int attribPosition = glGetAttribLocation(m_SolidRectShader, "a_Position");
-	glEnableVertexAttribArray(attribPosition);
-	glBindBuffer(GL_ARRAY_BUFFER, m_VBORect);
-	glVertexAttribPointer(attribPosition, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, 0);
-
-	glDrawArrays(GL_TRIANGLES, 0, 6);
-
-	glDisableVertexAttribArray(attribPosition);
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    PresentScene();
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
-
-void Renderer::GetGLPosition(float x, float y, float *newX, float *newY)
+void Renderer::Panel(float x,float y,float w,float h,Color c)
 {
-	*newX = x * 2.f / m_WindowSizeX;
-	*newY = y * 2.f / m_WindowSizeY;
+    const float l=2*x/m_width-1, r=2*(x+w)/m_width-1;
+    const float t=1-2*y/m_height, b=1-2*(y+h)/m_height;
+    Geometry::Quad(m_batch,{l,t,0},{r,t,0},{r,b,0},{l,b,0},c);
+}
+void Renderer::Text(float x,float y,const std::string& text,Color c,float scale,float maxWidth)
+{
+    if (!m_fontReady || text.empty() || scale <= 0 ||
+        text.size() > static_cast<size_t>((std::numeric_limits<int>::max)())) return;
+    const int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(),
+        static_cast<int>(text.size()), nullptr, 0);
+    if (length <= 0) {
+        std::cerr << "Text requires valid UTF-8 input.\n";
+        return;
+    }
+    std::wstring wide(length, L'\0');
+    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(),
+        static_cast<int>(text.size()), &wide[0], length);
+    const float factor = scale * 9.f / 28.f;
+    const float left = x, right = maxWidth > 0 ? (std::min)(x + maxWidth, float(m_width - 8)) : float(m_width - 8);
+    for (size_t i = 0; i < wide.size(); ++i) {
+        wchar_t ch = wide[i];
+        if (ch == L'\r') continue;
+        if (ch == L'\n') { x = left; y += 12 * scale; continue; }
+        if (ch == L'\t') ch = L' ';
+        // The prototype supports Korean/BMP glyphs; replace one supplementary code point once.
+        if (ch >= 0xd800 && ch <= 0xdbff) {
+            if (i + 1 < wide.size() && wide[i+1] >= 0xdc00 && wide[i+1] <= 0xdfff) ++i;
+            ch = L'?';
+        }
+        if (m_font->Full(ch)) { Flush(); m_font->Reset(); }
+        const auto glyph = m_font->Get(ch);
+        const float advance = glyph.advance * factor;
+        if (x + advance > right) {
+            if (maxWidth <= 0 || advance > right - left) break;
+            x = left; y += 12 * scale;
+        }
+        if (y + 9 * scale > m_height) break;
+        if (glyph.width > 0 && glyph.height > 0) {
+            const float l = 2 * (x + glyph.left * factor) / m_width - 1;
+            const float r = l + 2 * glyph.width * factor / m_width;
+            const float t = 1 - 2 * (y + glyph.top * factor) / m_height;
+            const float b = t - 2 * glyph.height * factor / m_height;
+            const Vertex a = {{l,t,0},c,{glyph.u,glyph.v}}, d = {{l,b,0},c,{glyph.u,glyph.V}};
+            const Vertex e = {{r,t,0},c,{glyph.U,glyph.v}}, f = {{r,b,0},c,{glyph.U,glyph.V}};
+            m_batch.insert(m_batch.end(), {a,e,f,a,f,d});
+        }
+        x += advance;
+    }
+}
+void Renderer::End()
+{
+    PresentScene();
+    Flush();
 }

@@ -18,7 +18,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="ReadMe.txt" />
+    <Text Include="..\PROTOTYPE_README.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -28,6 +28,18 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="Renderer.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="World.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Prototype.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="KoreanText.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="PostProcessing.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
@@ -41,12 +53,30 @@
     <ClCompile Include="Renderer.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="World.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Prototype.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="PostProcessing.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Shaders\SolidRect.fs">
       <Filter>소스 파일\Shaders</Filter>
     </None>
     <None Include="Shaders\SolidRect.vs">
+      <Filter>소스 파일\Shaders</Filter>
+    </None>
+    <None Include="Shaders\PostProcess.vs">
+      <Filter>소스 파일\Shaders</Filter>
+    </None>
+    <None Include="Shaders\PostProcess.fs">
+      <Filter>소스 파일\Shaders</Filter>
+    </None>
+    <None Include="Shaders\Blur.fs">
       <Filter>소스 파일\Shaders</Filter>
     </None>
   </ItemGroup>
