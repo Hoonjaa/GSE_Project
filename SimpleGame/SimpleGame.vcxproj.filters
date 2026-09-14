@@ -19,6 +19,7 @@
   </ItemGroup>
   <ItemGroup>
     <Text Include="..\PROTOTYPE_README.txt" />
+    <Text Include="..\LEVEL_ONE_README.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -42,6 +43,12 @@
     <ClInclude Include="PostProcessing.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="LevelOneTerrain.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="LevelOne.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -62,9 +69,21 @@
     <ClCompile Include="PostProcessing.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="LevelOneTerrain.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="LevelOne.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Shaders\SolidRect.fs">
+      <Filter>소스 파일\Shaders</Filter>
+    </None>
+    <None Include="Shaders\World.vs">
+      <Filter>소스 파일\Shaders</Filter>
+    </None>
+    <None Include="Shaders\World.fs">
       <Filter>소스 파일\Shaders</Filter>
     </None>
     <None Include="Shaders\SolidRect.vs">

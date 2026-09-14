@@ -4,17 +4,18 @@
 // Keep character voice and proper names consistent when adding generated dialogue.
 namespace KoreanText
 {
-    constexpr const char* Title = "미지의 항로";
+    constexpr const char* Title = "새싹 탐험가의 섬";
     constexpr const char* Subtitle = "대항해 시대 / OpenGL";
-    constexpr const char* Version = "렌더링 프로토타입 01";
+    constexpr const char* Version = "레벨 1 · 파밍 튜토리얼";
     constexpr const char* Chart = "주변 해도";
     constexpr const char* North = "북";
     constexpr const char* Sailing = "항해 중";
     constexpr const char* Walking = "도보 이동";
     constexpr const char* Chunk = " / 청크 ";
-    constexpr const char* Movement = "WASD 이동 / Space 빠르게 이동 / E 승선·하선";
-    constexpr const char* Tools = "휠 확대·축소 / G 경계 / H 안내 / R 항구 복귀 / Esc 종료";
-    constexpr const char* Welcome = "부두 끝으로 걸어가 배 가까이에서 E를 눌러 승선하세요.";
+    constexpr const char* Movement = "WASD 이동 / 좌클릭 공격 / F 강화 / E 승선·하선";
+    constexpr const char* Tools = "Space 달리기 / 휠 줌 / V 후처리 안내 / R 항구 복귀 / Esc 종료";
+    constexpr const char* Welcome =
+        "항구 밖의 게를 처치해 경험치와 장비를 모으세요. 붉은 표시는 북쪽 보스입니다.";
     constexpr const char* Boarded = "출항했습니다. 수평선 너머의 새로운 섬을 찾아보세요.";
     constexpr const char* TooFarToBoard = "배에 더 가까이 다가간 뒤 E를 눌러주세요.";
     constexpr const char* Landed = "상륙했습니다. 배는 이곳에서 기다립니다.";

@@ -1,5 +1,6 @@
 #pragma once
 #include "Renderer.h"
+#include "LevelOneTerrain.h"
 #include <cstdint>
 #include <map>
 #include <utility>
@@ -18,8 +19,8 @@ struct IslandChunk
 {
     bool hasIsland = false, harbor = false, ruin = false;
     float centerX = 16, centerZ = 16, radius = 8, phase = 0;
-    Mesh terrain;
-    Mesh scenery;
+    CachedMesh terrain;
+    CachedMesh scenery;
     float ShoreRadius(float angle) const;
 };
 
@@ -32,12 +33,24 @@ public:
     void Render(Renderer& renderer, const WorldPosition& camera, float time, bool grid) const;
     bool CanWalk(const WorldPosition& position) const;
     bool CanSail(const WorldPosition& position) const;
+
+    const LevelOneTerrain& Tutorial() const
+    {
+        return m_tutorial;
+    }
+
     const IslandChunk* At(const WorldPosition& position) const;
-    const std::map<Key, IslandChunk>& Chunks() const { return m_chunks; }
+
+    const std::map<Key, IslandChunk>& Chunks() const
+    {
+        return m_chunks;
+    }
+
 private:
     static IslandChunk Generate(std::int64_t x, std::int64_t z);
     bool LandAt(const WorldPosition& position, float margin) const;
     std::map<Key, IslandChunk> m_chunks;
     Key m_center = {0, 0};
     int m_radius = -1;
+    LevelOneTerrain m_tutorial;
 };

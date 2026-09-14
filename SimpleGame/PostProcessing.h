@@ -12,7 +12,7 @@ struct PostProcessingSettings
     float vignetteStrength = .24f;
     float blurRadius = 3.0f; // Full-resolution pixel spacing between Gaussian taps.
     float blurStrength = .85f;
-    float blurStart = .42f;  // Normalized radius: center = 0, corners = 1.
+    float blurStart = .42f; // Normalized radius: center = 0, corners = 1.
     float blurEnd = .98f;
 };
 
@@ -26,9 +26,15 @@ public:
     PostProcessing(const PostProcessing&) = delete;
     PostProcessing& operator=(const PostProcessing&) = delete;
     void Resize(int width, int height);
-    bool Ready() const { return m_ready; }
+
+    bool Ready() const
+    {
+        return m_ready;
+    }
+
     void BeginScene();
     void Composite(const PostProcessingSettings& settings);
+
 private:
     void ReleaseTargets();
     bool MakeTarget(GLuint& fbo, GLuint& texture, int width, int height);

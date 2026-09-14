@@ -1,5 +1,6 @@
 #version 330 core
 out vec2 v_UV;
+
 void main()
 {
     // Full-screen triangle; no position/UV buffer is required.
