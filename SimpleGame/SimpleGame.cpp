@@ -12,6 +12,7 @@ but WITHOUT ANY WARRANTY.
 #include "Dependencies/freeglut.h"
 #include "Renderer.h"
 #include "Prototype.h"
+#include "FrameProfiler.h"
 #include <iostream>
 #include <memory>
 #include <cstdint>
@@ -21,6 +22,7 @@ namespace
     std::unique_ptr<Renderer> renderer;
     std::unique_ptr<Prototype> game;
     std::uint32_t previousTick = 0;
+    FrameProfiler frameProfiler;
 
     void RenderScene()
     {
@@ -28,8 +30,10 @@ namespace
         {
             return;
         }
+        frameProfiler.BeginFrame();
         game->Render(*renderer);
         glutSwapBuffers();
+        frameProfiler.EndFrame(renderer->DrawCallCount(), std::cout);
     }
 
     void Resize(int w, int h)
@@ -108,6 +112,8 @@ namespace
 
     void Visibility(int state)
     {
+        // Hidden-window pauses should not skew the next visible FPS sample.
+        frameProfiler.Reset();
         if (game && state != GLUT_VISIBLE)
         {
             game->ClearInput();

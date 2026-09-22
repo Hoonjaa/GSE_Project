@@ -244,11 +244,6 @@ void LevelOneTerrain::Flow(float x, float z, std::vector<int>& distance) const
     }
 }
 
-void LevelOneTerrain::Render(Renderer& renderer, Vec3 offset) const
-{
-    renderer.Submit(m_mesh, offset);
-}
-
 void LevelOneTerrain::Map(Renderer& renderer, float left, float top, float extent) const
 {
     const float size = extent / Size;

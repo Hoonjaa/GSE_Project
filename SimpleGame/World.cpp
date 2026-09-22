@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "World.h"
+#include "WorldActors.h"
 #include <cmath>
 #include <limits>
 #include <algorithm>
@@ -267,6 +268,20 @@ IslandChunk World::Generate(std::int64_t cx, std::int64_t cz)
     return c;
 }
 
+World::World(SceneGraph& scene) : m_scene(scene)
+{
+    m_root = m_scene.Create<Actor>(NoActor, "월드").Id();
+    m_ocean = m_scene.Create<OceanActor>(m_root).Id();
+    m_chunksRoot = m_scene.Create<Actor>(m_root, "스트리밍 청크").Id();
+    m_tutorialActor = m_scene.Create<MeshActor>(m_root, m_tutorial.MeshResource(), "레벨 1 지형").Id();
+}
+
+World::~World()
+{
+    m_scene.Destroy(m_root);
+    m_scene.CollectDestroyed();
+}
+
 void World::Update(const WorldPosition& p, int radius)
 {
     const Key center = {p.chunkX, p.chunkZ};
@@ -281,6 +296,7 @@ void World::Update(const WorldPosition& p, int radius)
         if (i->first.first < p.chunkX - radius || i->first.first > p.chunkX + radius ||
             i->first.second < p.chunkZ - radius || i->first.second > p.chunkZ + radius)
         {
+            m_scene.Destroy(i->second.actor);
             i = m_chunks.erase(i);
         }
         else
@@ -295,7 +311,15 @@ void World::Update(const WorldPosition& p, int radius)
             Key key = {p.chunkX + x, p.chunkZ + z};
             if (m_chunks.find(key) == m_chunks.end())
             {
-                m_chunks.emplace(key, Generate(key.first, key.second));
+                auto inserted = m_chunks.emplace(key, Generate(key.first, key.second));
+                auto& chunk = inserted.first->second;
+                chunk.actor = m_scene.Create<Actor>(m_chunksRoot, "섬 청크").Id();
+                chunk.waves = m_scene.Create<WaveActor>(chunk.actor).Id();
+                if (!chunk.harbor)
+                {
+                    m_scene.Create<MeshActor>(chunk.actor, chunk.terrain, "섬 지형");
+                }
+                m_scene.Create<MeshActor>(chunk.actor, chunk.scenery, "건물 및 장식");
             }
         }
     }
@@ -411,18 +435,9 @@ bool World::CanSail(const WorldPosition& p) const
     return true;
 }
 
-void World::Render(Renderer& r, const WorldPosition& camera, float time, bool grid) const
+void World::Prepare(const WorldPosition& camera, float time, bool grid)
 {
-    const float seaExtent = static_cast<float>((m_radius + 2) * ChunkSize);
-    Mesh water;
-    Quad(
-        water,
-        {-seaExtent, -.04f, -seaExtent},
-        {seaExtent, -.04f, -seaExtent},
-        {seaExtent, -.04f, seaExtent},
-        {-seaExtent, -.04f, seaExtent},
-        {.055f, .40f, .51f});
-    r.Submit(water);
+    m_scene.Get<OceanActor>(m_ocean)->extent = static_cast<float>((m_radius + 2) * ChunkSize);
     for (const auto& entry : m_chunks)
     {
         WorldPosition origin;
@@ -430,55 +445,16 @@ void World::Render(Renderer& r, const WorldPosition& camera, float time, bool gr
         origin.chunkZ = entry.first.second;
         origin.x = 0;
         origin.z = 0;
-        const Vec3 offset = origin.RelativeTo(camera);
-        Mesh surface;
-        // Waves remain anchored to chunk-local coordinates across origin shifts.
-        for (int z = 0; z < 8; ++z)
-        {
-            for (int x = 0; x < 8; ++x)
-            {
-                const float phase = time * .8f + x * .75f + z * 1.2f;
-                const float px = x * 4.f + 1 + std::sin(phase) * .35f, pz = z * 4.f + 1.5f;
-                const float light = .5f + .5f * std::sin(phase);
-                Quad(
-                    surface,
-                    {px, 0, pz},
-                    {px + 1.1f + light * .7f, 0, pz},
-                    {px + 1.3f + light * .7f, 0, pz + .065f},
-                    {px + .2f, 0, pz + .065f},
-                    {.09f + light * .055f, .47f + light * .08f, .57f + light * .07f});
-            }
-        }
-        if (grid)
-        {
-            Quad(
-                surface,
-                {0, .65f, 0},
-                {32, .65f, 0},
-                {32, .65f, .035f},
-                {0, .65f, .035f},
-                {.98f, .71f, .29f});
-            Quad(
-                surface,
-                {0, .65f, 0},
-                {.035f, .65f, 0},
-                {.035f, .65f, 32},
-                {0, .65f, 32},
-                {.98f, .71f, .29f});
-        }
-        r.Submit(surface, offset);
-        if (!entry.second.harbor)
-        {
-            r.Submit(entry.second.terrain, offset);
-        }
-        r.Submit(entry.second.scenery, offset);
+        m_scene.Find(entry.second.actor)->transform.position = origin.RelativeTo(camera);
+        auto* waves = m_scene.Get<WaveActor>(entry.second.waves);
+        waves->time = time;
+        waves->grid = grid;
     }
     WorldPosition origin;
     origin.x = 0;
     origin.z = 0;
-    const auto offset = origin.RelativeTo(camera);
-    if (std::abs(offset.x) < 400 && std::abs(offset.z) < 400)
-    {
-        m_tutorial.Render(r, offset);
-    }
+    auto* tutorial = m_scene.Find(m_tutorialActor);
+    tutorial->transform.position = origin.RelativeTo(camera);
+    const auto p = tutorial->transform.position;
+    tutorial->visible = std::abs(p.x) < 400 && std::abs(p.z) < 400;
 }

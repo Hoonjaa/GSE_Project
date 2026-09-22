@@ -1,5 +1,5 @@
 #pragma once
-#include "Renderer.h"
+#include "SceneGraph.h"
 #include "LevelOneTerrain.h"
 #include <cstdint>
 #include <map>
@@ -19,6 +19,7 @@ struct IslandChunk
 {
     bool hasIsland = false, harbor = false, ruin = false;
     float centerX = 16, centerZ = 16, radius = 8, phase = 0;
+    ActorId actor = NoActor, waves = NoActor;
     CachedMesh terrain;
     CachedMesh scenery;
     float ShoreRadius(float angle) const;
@@ -29,8 +30,12 @@ class World
 public:
     using Key = std::pair<std::int64_t, std::int64_t>;
     static constexpr std::uint64_t Seed = 20260908;
+    explicit World(SceneGraph& scene);
+    ~World();
+    World(const World&) = delete;
+    World& operator=(const World&) = delete;
     void Update(const WorldPosition& player, int radius);
-    void Render(Renderer& renderer, const WorldPosition& camera, float time, bool grid) const;
+    void Prepare(const WorldPosition& camera, float time, bool grid);
     bool CanWalk(const WorldPosition& position) const;
     bool CanSail(const WorldPosition& position) const;
 
@@ -49,6 +54,8 @@ public:
 private:
     static IslandChunk Generate(std::int64_t x, std::int64_t z);
     bool LandAt(const WorldPosition& position, float margin) const;
+    SceneGraph& m_scene;
+    ActorId m_root = NoActor, m_ocean = NoActor, m_chunksRoot = NoActor, m_tutorialActor = NoActor;
     std::map<Key, IslandChunk> m_chunks;
     Key m_center = {0, 0};
     int m_radius = -1;

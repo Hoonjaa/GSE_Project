@@ -1,6 +1,7 @@
 #pragma once
 #include "Dependencies/glew.h"
 #include "PostProcessing.h"
+#include "RenderStatistics.h"
 #include <vector>
 #include <string>
 #include <memory>
@@ -104,6 +105,11 @@ public:
         return m_triangleCount;
     }
 
+    std::uint64_t DrawCallCount() const
+    {
+        return m_statistics.DrawCallCount();
+    }
+
 private:
     void Flush();
     void PresentScene();
@@ -129,4 +135,5 @@ private:
     PostProcessingSettings m_postSettings;
     bool m_hdrScene = false, m_overlay = false;
     size_t m_triangleCount = 0;
+    RenderStatistics m_statistics;
 };

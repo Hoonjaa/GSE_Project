@@ -154,9 +154,16 @@
   <ItemGroup>
     <Text Include="..\PROTOTYPE_README.txt" />
     <Text Include="..\LEVEL_ONE_README.txt" />
+    <Text Include="..\SCENE_GRAPH_README.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Actor.h" />
+    <ClInclude Include="SceneGraph.h" />
+    <ClInclude Include="GameplayActors.h" />
+    <ClInclude Include="WorldActors.h" />
     <ClInclude Include="Renderer.h" />
+    <ClInclude Include="RenderStatistics.h" />
+    <ClInclude Include="FrameProfiler.h" />
     <ClInclude Include="World.h" />
     <ClInclude Include="Prototype.h" />
     <ClInclude Include="KoreanText.h" />
@@ -167,6 +174,14 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Actor.cpp" />
+    <ClCompile Include="SceneGraph.cpp" />
+    <ClCompile Include="GameplayActors.cpp" />
+    <ClCompile Include="LevelMeshes.cpp" />
+    <ClCompile Include="WorldActors.cpp" />
+    <ClCompile Include="PrototypeScene.cpp" />
+    <ClCompile Include="PrototypeHud.cpp" />
+    <ClCompile Include="LevelOneHud.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="World.cpp" />
     <ClCompile Include="Prototype.cpp" />

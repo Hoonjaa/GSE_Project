@@ -1,5 +1,6 @@
 #pragma once
 #include "World.h"
+#include "WorldActors.h"
 #include "LevelOne.h"
 #include <array>
 #include <string>
@@ -16,18 +17,28 @@ public:
     void MouseAttack(int x, int y, const Renderer& renderer);
 
 private:
+    void CreateActors();
+    void PrepareActors();
+    void RenderHud(Renderer& renderer);
+    WorldActor& Player();
+    const WorldActor& Player() const;
+    WorldActor& ShipActor();
+    const WorldActor& ShipActor() const;
     void Reset();
     void Interact();
     void Move(double dx, double dz);
 
     WorldPosition ActivePosition() const
     {
-        return m_sailing ? m_ship : m_player;
+        return m_sailing ? ShipActor().location : Player().location;
     }
 
+    SceneGraph m_scene;
     World m_world;
     LevelOne m_levelOne;
-    WorldPosition m_player, m_ship, m_camera;
+    WorldPosition m_camera;
+    ActorId m_actorsRoot = NoActor, m_playerActor = NoActor, m_shipActor = NoActor;
+    ActorId m_playerBody = NoActor, m_shipBody = NoActor, m_wake = NoActor, m_harbor = NoActor;
     std::array<bool, 256> m_keys = {};
     bool m_sailing = false, m_grid = false, m_hud = true, m_moving = false;
     bool m_postHud = false;
@@ -35,6 +46,4 @@ private:
     double m_frameAverage = 1.0 / 60.0;
     std::string m_message;
     PostProcessingSettings m_postSettings;
-    CachedMesh m_shipMesh, m_characterMesh, m_npcMesh;
-    CachedMesh m_markerMesh, m_swordMesh;
 };

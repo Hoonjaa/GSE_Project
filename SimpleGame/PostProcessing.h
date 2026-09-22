@@ -1,6 +1,8 @@
 #pragma once
 #include "Dependencies/glew.h"
 
+class RenderStatistics;
+
 struct PostProcessingSettings
 {
     bool enabled = true;
@@ -33,7 +35,7 @@ public:
     }
 
     void BeginScene();
-    void Composite(const PostProcessingSettings& settings);
+    void Composite(const PostProcessingSettings& settings, RenderStatistics& statistics);
 
 private:
     void ReleaseTargets();

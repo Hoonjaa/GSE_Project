@@ -21,7 +21,12 @@ public:
     int Index(float x, float z) const;
     Vec3 Center(int index) const;
     void Flow(float x, float z, std::vector<int>& distance) const;
-    void Render(Renderer& renderer, Vec3 offset) const;
+
+    const CachedMesh& MeshResource() const
+    {
+        return m_mesh;
+    }
+
     void Map(Renderer& renderer, float left, float top, float extent) const;
 
     std::uint32_t Seed() const

@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "PostProcessing.h"
+#include "RenderStatistics.h"
 #include <algorithm>
 #include <iostream>
 
@@ -176,7 +177,7 @@ void PostProcessing::BeginScene()
     glEnable(GL_MULTISAMPLE);
 }
 
-void PostProcessing::Composite(const PostProcessingSettings& settings)
+void PostProcessing::Composite(const PostProcessingSettings& settings, RenderStatistics& statistics)
 {
     if (!m_ready)
     {
@@ -199,11 +200,11 @@ void PostProcessing::Composite(const PostProcessingSettings& settings)
         glBindFramebuffer(GL_FRAMEBUFFER, m_blurFbo[0]);
         glBindTexture(GL_TEXTURE_2D, m_resolveColor);
         glUniform2f(glGetUniformLocation(m_blur, "u_Step"), settings.blurRadius / m_width, 0);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        statistics.DrawArrays(GL_TRIANGLES, 0, 3);
         glBindFramebuffer(GL_FRAMEBUFFER, m_blurFbo[1]);
         glBindTexture(GL_TEXTURE_2D, m_blurColor[0]);
         glUniform2f(glGetUniformLocation(m_blur, "u_Step"), 0, settings.blurRadius / m_height);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        statistics.DrawArrays(GL_TRIANGLES, 0, 3);
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, m_width, m_height);
@@ -222,7 +223,7 @@ void PostProcessing::Composite(const PostProcessingSettings& settings)
         settings.vignette ? settings.vignetteStrength : 0);
     glUniform1f(glGetUniformLocation(m_composite, "u_BlurStrength"), blurred ? settings.blurStrength : 0);
     glUniform2f(glGetUniformLocation(m_composite, "u_BlurRange"), settings.blurStart, settings.blurEnd);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    statistics.DrawArrays(GL_TRIANGLES, 0, 3);
     glBindTexture(GL_TEXTURE_2D, 0);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, 0);

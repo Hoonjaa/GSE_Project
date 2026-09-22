@@ -1,18 +1,22 @@
 #pragma once
-#include "LevelOneTerrain.h"
+#include "GameplayActors.h"
 #include <random>
 #include <string>
 
+// Level rules only: placement, progression, rewards, and player combat policy.
 class LevelOne
 {
 public:
-    explicit LevelOne(const LevelOneTerrain& terrain);
-    bool Update(float dt, Vec3 player, bool sailing);
+    LevelOne(SceneGraph& scene, const LevelOneTerrain& terrain);
+    ~LevelOne();
+    LevelOne(const LevelOne&) = delete;
+    LevelOne& operator=(const LevelOne&) = delete;
+    void BeginFrame(float dt, Vec3 player, bool sailing);
+    bool EndFrame();
+    void Prepare(Vec3 offset, bool showHud);
     void Attack(Vec3 player, Vec3 aim, bool sailing);
     void Upgrade();
     void Recover();
-    void Render(Renderer& renderer, Vec3 worldOffset) const;
-    void Overlay(Renderer& renderer, Vec3 worldOffset, bool showHud) const;
     void Map(Renderer& renderer, float left, float top, float extent, Vec3 player) const;
 
     int Damage() const
@@ -25,51 +29,27 @@ public:
         return 100 + (m_level - 1) * 18;
     }
 
-    bool Attacking() const
-    {
-        return m_slashTime > 0;
-    }
+    bool Attacking() const;
 
 private:
-    struct Enemy
-    {
-        Vec3 position, home, target;
-        bool boss = false;
-        float hp = 32, maxHp = 32, cooldown = 0, windup = 0, respawn = 0, flash = 0;
-    };
-
-    struct Drop
-    {
-        Vec3 position;
-        int weapon = 0;
-        float age = 0, speed = 0;
-        bool collected = false, attracted = false, persistent = false;
-    };
-
-    struct Number
-    {
-        Vec3 position;
-        int amount = 0;
-        float time = 0;
-        bool player = false;
-    };
-
-    void Reward(const Enemy& enemy);
-    void CreateMeshes();
-    CachedMesh m_enemyMeshes[4], m_warningMeshes[2], m_dropMeshes[2], m_slashMesh;
+    void Reward(const EnemyActor& enemy);
     void GainExperience(int amount);
     void Notify(const std::string& text);
-    void Step(Vec3& position, Vec3 target, float distance);
+    void HitPlayer(int damage);
+    void Collect(int weapon);
+    void AddNumber(Vec3 position, int amount, bool player);
+    void Overlay(Renderer& renderer) const;
+    void PruneHandles(std::vector<ActorId>& handles);
+    SceneGraph& m_scene;
+    ActorId m_root = NoActor, m_effectsRoot = NoActor, m_slash = NoActor;
     const LevelOneTerrain& m_terrain;
+    GameplayContext m_context;
+    LevelMeshes m_meshes;
     std::mt19937 m_random;
-    std::vector<Enemy> m_enemies;
-    std::vector<Drop> m_drops;
-    std::vector<Number> m_numbers;
-    std::vector<int> m_flow;
+    std::vector<ActorId> m_enemies, m_drops, m_numbers;
     int m_level = 1, m_xp = 0, m_weapon = 0, m_upgrade = 0, m_stones = 0, m_kills = 0;
-    float m_health = 100, m_invincible = 0, m_sinceHit = 0, m_cooldown = 0, m_slashTime = 0, m_flowTime = 0;
+    float m_health = 100, m_invincible = 0, m_sinceHit = 0, m_cooldown = 0, m_flowTime = 0;
     float m_noticeTime = 0;
-    bool m_bossDefeated = false;
-    Vec3 m_slashPosition = {}, m_slashAim = {0, 0, -1};
+    bool m_bossDefeated = false, m_showHud = true;
     std::string m_notice;
 };

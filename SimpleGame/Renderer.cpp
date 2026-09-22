@@ -463,6 +463,7 @@ void Renderer::SetPostProcessing(const PostProcessingSettings& settings)
 
 void Renderer::Begin(float zoom)
 {
+    m_statistics.Reset();
     // Unloaded chunks must not retain GPU memory in an endlessly growing world.
     for (auto it = m_meshCache.begin(); it != m_meshCache.end();)
     {
@@ -577,7 +578,7 @@ void Renderer::Submit(const CachedMesh& mesh, Vec3 offset, float rotation)
     glUniform1i(m_worldHdr, m_hdrScene && !m_overlay);
     glUniform1f(m_worldIntensity, m_postSettings.sceneIntensity);
     glBindVertexArray(found->second.vao);
-    glDrawArrays(GL_TRIANGLES, 0, found->second.count);
+    m_statistics.DrawArrays(GL_TRIANGLES, 0, found->second.count);
     m_triangleCount += found->second.count / 3;
 }
 
@@ -615,7 +616,7 @@ void Renderer::Flush()
         static_cast<GLsizeiptr>(m_batch.size() * sizeof(Vertex)),
         m_batch.data(),
         GL_STREAM_DRAW);
-    glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(m_batch.size()));
+    m_statistics.DrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(m_batch.size()));
     m_triangleCount += m_batch.size() / 3;
     m_batch.clear();
 }
@@ -629,7 +630,7 @@ void Renderer::PresentScene()
     Flush();
     if (m_hdrScene)
     {
-        m_post->Composite(m_postSettings);
+        m_post->Composite(m_postSettings, m_statistics);
     }
     m_overlay = true;
 }
