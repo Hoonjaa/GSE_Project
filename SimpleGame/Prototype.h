@@ -16,6 +16,21 @@ public:
     void Zoom(int direction);
     void MouseAttack(int x, int y, const Renderer& renderer);
 
+    size_t ActorCount() const
+    {
+        return m_scene.Size();
+    }
+
+    size_t LoadedChunkCount() const
+    {
+        return m_world.Chunks().size();
+    }
+
+    std::uint32_t TerrainSeed() const
+    {
+        return m_world.Tutorial().Seed();
+    }
+
 private:
     void CreateActors();
     void PrepareActors();

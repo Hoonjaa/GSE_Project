@@ -155,12 +155,16 @@
     <Text Include="..\PROTOTYPE_README.txt" />
     <Text Include="..\LEVEL_ONE_README.txt" />
     <Text Include="..\SCENE_GRAPH_README.txt" />
+    <Text Include="..\DRAW_CALL_OPTIMIZATION_REPORT.md" />
+    <Text Include="..\PERFORMANCE_ANALYSIS_LOG.md" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Actor.h" />
     <ClInclude Include="SceneGraph.h" />
     <ClInclude Include="GameplayActors.h" />
     <ClInclude Include="WorldActors.h" />
+    <ClInclude Include="Diagnostics.h" />
+    <ClInclude Include="MeshCache.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="RenderStatistics.h" />
     <ClInclude Include="FrameProfiler.h" />
@@ -182,6 +186,9 @@
     <ClCompile Include="PrototypeScene.cpp" />
     <ClCompile Include="PrototypeHud.cpp" />
     <ClCompile Include="LevelOneHud.cpp" />
+    <ClCompile Include="Diagnostics.cpp" />
+    <ClCompile Include="MeshCache.cpp" />
+    <ClCompile Include="FrameProfiler.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="World.cpp" />
     <ClCompile Include="Prototype.cpp" />

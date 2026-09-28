@@ -1,6 +1,14 @@
 메시 캐시와 셰이더 구성
 ======================
 
+2026-09-22 변경:
+CachedMesh는 즉시 draw하지 않고 같은 공유 메시별 인스턴스 큐에 모은 뒤
+후처리 직전에 glDrawArraysInstanced로 처리한다.
+파도/바다/깃발/갈매기는 더 이상 매 프레임 Mesh를 생성하지 않는다.
+최초 파일 캐시 생성 또는 로딩 후 GPU 셰이더로 변형한다.
+아래의 동적 효과/인스턴싱 미지원 설명은 이전 버전 기준이며,
+최신 동작과 제약은 DRAW_CALL_OPTIMIZATION_REPORT.md를 참고한다.
+
 1. 고정 메시
 Geometry 함수로 Mesh를 구성한 뒤 CachedMesh(std::move(mesh))로 보관한다.
 CachedMesh는 불변 정점 데이터를 공유한다. 복사한 핸들은 같은 GPU 버퍼를 사용한다.

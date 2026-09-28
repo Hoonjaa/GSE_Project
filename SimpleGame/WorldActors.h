@@ -16,32 +16,32 @@ public:
 class OceanActor : public Actor
 {
 public:
-    OceanActor() : Actor("바다")
-    {
-    }
+    OceanActor();
 
     float extent = 128;
     void Render(Renderer& renderer, const ActorTransform& world) const override;
+
+private:
+    CachedMesh m_mesh;
 };
 
 class WaveActor : public Actor
 {
 public:
-    WaveActor() : Actor("파도 및 청크 격자")
-    {
-    }
+    WaveActor();
 
     float time = 0;
     bool grid = false;
     void Render(Renderer& renderer, const ActorTransform& world) const override;
+
+private:
+    CachedMesh m_mesh, m_grid;
 };
 
 class FlagActor : public Actor
 {
 public:
-    FlagActor() : Actor("항구 깃발")
-    {
-    }
+    FlagActor();
 
     void Update(float dt) override
     {
@@ -52,14 +52,13 @@ public:
 
 private:
     float m_time = 0;
+    CachedMesh m_mesh;
 };
 
 class GullActor : public Actor
 {
 public:
-    explicit GullActor(int index) : Actor("갈매기"), m_index(index)
-    {
-    }
+    explicit GullActor(int index);
 
     void Update(float dt) override;
     void Render(Renderer& renderer, const ActorTransform& world) const override;
@@ -67,4 +66,5 @@ public:
 private:
     int m_index;
     float m_time = 0;
+    CachedMesh m_mesh;
 };

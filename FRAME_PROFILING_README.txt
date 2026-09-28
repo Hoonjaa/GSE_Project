@@ -1,6 +1,14 @@
 기본 콘솔 프로파일링
 ===================
 
+2026-09-22 갱신:
+현재는 glDrawArraysInstanced를 포함하고, 실행 파일 옆 Logs/run_*/에
+summary.csv / batches.csv / events.log를 저장한다.
+GSE_PROFILE_DETAIL=1로 실행하면 매 프레임 frames.csv도 추가한다.
+CPU update/render/swap 시간과 캐시/업로드 지표도 수집한다.
+최신 필드 정의와 분석 절차는 DRAW_CALL_OPTIMIZATION_REPORT.md를 기준으로 한다.
+아래 내용은 초기 콘솔 로깅 형식에 대한 설명이다.
+
 실행 중 약 1초마다 다음 형식의 집계 로그가 출력된다.
 [Frame] FPS=60.0 | Draw calls/frame: last=125 avg=123.5 min=120 max=125
 위 숫자는 형식 설명용 예시이며 실제 측정값이 아니다.

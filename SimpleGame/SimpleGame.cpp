@@ -13,6 +13,8 @@ but WITHOUT ANY WARRANTY.
 #include "Renderer.h"
 #include "Prototype.h"
 #include "FrameProfiler.h"
+#include "Diagnostics.h"
+#include <chrono>
 #include <iostream>
 #include <memory>
 #include <cstdint>
@@ -32,8 +34,9 @@ namespace
         }
         frameProfiler.BeginFrame();
         game->Render(*renderer);
+        frameProfiler.RenderFinished();
         glutSwapBuffers();
-        frameProfiler.EndFrame(renderer->DrawCallCount(), std::cout);
+        frameProfiler.EndFrame(*renderer, game->ActorCount(), game->LoadedChunkCount(), std::cout);
     }
 
     void Resize(int w, int h)
@@ -60,7 +63,11 @@ namespace
         const auto now = static_cast<std::uint32_t>(glutGet(GLUT_ELAPSED_TIME));
         const double dt = static_cast<double>(now - previousTick) / 1000.0;
         previousTick = now;
+        const auto updateStart = std::chrono::steady_clock::now();
         game->Update(dt, renderer->Width(), renderer->Height());
+        frameProfiler.RecordUpdate(
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - updateStart)
+                .count());
         glutPostRedisplay();
         glutTimerFunc(16, Tick, 0);
     }
@@ -112,6 +119,7 @@ namespace
 
     void Visibility(int state)
     {
+        Diagnostics::Get().Event("visibility=" + std::to_string(state) + " fps_window_reset=1");
         // Hidden-window pauses should not skew the next visible FPS sample.
         frameProfiler.Reset();
         if (game && state != GLUT_VISIBLE)
@@ -150,6 +158,14 @@ int main(int argc, char** argv)
     std::cout << "OpenGL: " << glGetString(GL_VERSION) << "\n"
               << "WASD: move | Space: boost | E: board/land | Wheel: zoom\n"
               << "G: chunk grid | H: HUD | R: return home | Escape: exit\n";
+    auto glInfo = [](GLenum name)
+    {
+        const auto* value = glGetString(name);
+        return value ? reinterpret_cast<const char*>(value) : "unavailable";
+    };
+    Diagnostics::Get().Event(
+        std::string("GL vendor=") + glInfo(GL_VENDOR) + " renderer=" + glInfo(GL_RENDERER) +
+        " version=" + glInfo(GL_VERSION));
     renderer.reset(new Renderer(1280, 800));
     if (!renderer->IsInitialized())
     {
@@ -159,6 +175,7 @@ int main(int argc, char** argv)
         return 1;
     }
     game.reset(new Prototype());
+    Diagnostics::Get().Event("terrain_seed=" + std::to_string(game->TerrainSeed()));
     game->Update(0, 1280, 800);
     glutDisplayFunc(RenderScene);
     glutReshapeFunc(Resize);

@@ -158,7 +158,7 @@ LevelOneTerrain::LevelOneTerrain() : m_land(Size * Size, 0), m_blocked(Size * Si
     }
     // A recognizable, obstacle-free boss clearing.
     Disc(mesh, {16, .56f, -12}, 6, {.74f, .69f, .46f}, 48);
-    m_mesh = CachedMesh(std::move(mesh));
+    m_mesh = CachedMesh(std::move(mesh), "level1_terrain_" + std::to_string(m_seed));
 }
 
 int LevelOneTerrain::Index(float x, float z) const

@@ -263,8 +263,10 @@ IslandChunk World::Generate(std::int64_t cx, std::int64_t cz)
             Cone(scenery, {c.centerX, Ground, c.centerZ}, c.radius * .38f, 2, {.49f, .60f, .36f}, 7);
         }
     }
-    c.terrain = CachedMesh(std::move(terrain));
-    c.scenery = CachedMesh(std::move(scenery));
+    c.terrain =
+        CachedMesh(std::move(terrain), "chunk_" + std::to_string(cx) + "_" + std::to_string(cz) + "_terrain");
+    c.scenery =
+        CachedMesh(std::move(scenery), "chunk_" + std::to_string(cx) + "_" + std::to_string(cz) + "_scenery");
     return c;
 }
 

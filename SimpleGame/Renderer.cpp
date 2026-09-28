@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "Renderer.h"
+#include "Diagnostics.h"
 #include <cmath>
 #include <cstddef>
 #include <fstream>
@@ -354,13 +355,12 @@ Renderer::Renderer(int w, int h) : m_width(w), m_height(h)
     {
         return;
     }
-    m_worldOffset = glGetUniformLocation(m_worldProgram, "u_Offset");
-    m_worldRotation = glGetUniformLocation(m_worldProgram, "u_Rotation");
     m_worldProjection = glGetUniformLocation(m_worldProgram, "u_ProjectionScale");
     m_worldHdr = glGetUniformLocation(m_worldProgram, "u_HdrScene");
     m_worldIntensity = glGetUniformLocation(m_worldProgram, "u_SceneIntensity");
     glGenVertexArrays(1, &m_vao);
     glGenBuffers(1, &m_vbo);
+    glGenBuffers(1, &m_instanceVbo);
     glBindVertexArray(m_vao);
     glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
     glEnableVertexAttribArray(0);
@@ -414,6 +414,10 @@ Renderer::~Renderer()
     {
         glDeleteProgram(m_worldProgram);
     }
+    if (m_instanceVbo)
+    {
+        glDeleteBuffers(1, &m_instanceVbo);
+    }
     m_font.reset();
     m_post.reset();
     if (m_vbo)
@@ -464,14 +468,18 @@ void Renderer::SetPostProcessing(const PostProcessingSettings& settings)
 void Renderer::Begin(float zoom)
 {
     m_statistics.Reset();
+    m_batchRecords.clear();
     // Unloaded chunks must not retain GPU memory in an endlessly growing world.
     for (auto it = m_meshCache.begin(); it != m_meshCache.end();)
     {
         if (it->first.expired())
         {
+            Diagnostics::Get().Event(
+                "gpu_cache_evict id=" + std::to_string(it->second.id) + " asset=" + it->second.name);
             glDeleteBuffers(1, &it->second.vbo);
             glDeleteVertexArrays(1, &it->second.vao);
             it = m_meshCache.erase(it);
+            ++m_statistics.gpuCacheEvictions;
         }
         else
         {
@@ -509,6 +517,7 @@ void Renderer::Begin(float zoom)
 
 void Renderer::Submit(const Mesh& mesh, Vec3 o, float rotation)
 {
+    m_statistics.dynamicVertices += mesh.size();
     const float c = std::cos(rotation), s = std::sin(rotation);
     for (const Vertex& v : mesh)
     {
@@ -526,60 +535,137 @@ void Renderer::Submit(const Mesh& mesh, Vec3 o, float rotation)
 
 void Renderer::Submit(const CachedMesh& mesh, Vec3 offset, float rotation)
 {
+    Submit(mesh, offset, rotation, {1, 1, 1}, MeshAnimation::None, 0);
+}
+
+void Renderer::Submit(
+    const CachedMesh& mesh,
+    Vec3 offset,
+    float rotation,
+    Vec3 scale,
+    MeshAnimation animation,
+    float animationTime)
+{
     if (!mesh.m_vertices || mesh.m_vertices->empty())
     {
         return;
     }
-    Flush();
+    // UI is order-dependent: do not sort cached geometry across UI batches.
+    if (m_overlay)
+    {
+        Flush();
+    }
     const MeshKey key(mesh.m_vertices);
     auto found = m_meshCache.find(key);
     if (found == m_meshCache.end())
     {
         GpuMesh gpu;
-        gpu.count = static_cast<GLsizei>(mesh.m_vertices->size());
-        glGenVertexArrays(1, &gpu.vao);
-        glGenBuffers(1, &gpu.vbo);
-        if (!gpu.vao || !gpu.vbo)
-        {
-            glDeleteBuffers(1, &gpu.vbo);
-            glDeleteVertexArrays(1, &gpu.vao);
-            Submit(*mesh.m_vertices, offset, rotation);
-            return;
-        }
-        glBindVertexArray(gpu.vao);
-        glBindBuffer(GL_ARRAY_BUFFER, gpu.vbo);
-        glBufferData(
-            GL_ARRAY_BUFFER,
-            static_cast<GLsizeiptr>(mesh.m_vertices->size() * sizeof(Vertex)),
-            mesh.m_vertices->data(),
-            GL_STATIC_DRAW);
-        glEnableVertexAttribArray(0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(
-            0,
-            3,
-            GL_FLOAT,
-            GL_FALSE,
-            sizeof(Vertex),
-            reinterpret_cast<void*>(offsetof(Vertex, position)));
-        glVertexAttribPointer(
-            1,
-            3,
-            GL_FLOAT,
-            GL_FALSE,
-            sizeof(Vertex),
-            reinterpret_cast<void*>(offsetof(Vertex, color)));
-        found = m_meshCache.emplace(key, gpu).first;
+        gpu.id = m_nextMeshId++;
+        gpu.name = mesh.m_name;
+        found = m_meshCache.emplace(key, std::move(gpu)).first;
+        ++m_statistics.gpuCacheMisses;
+    }
+    else
+    {
+        ++m_statistics.gpuCacheHits;
+    }
+    auto& gpu = found->second;
+    if (gpu.instances.empty())
+    {
+        gpu.pendingOwner = mesh.m_vertices;
+        m_pendingOrder.push_back(key);
+    }
+    MeshInstance instance;
+    instance.offset = offset;
+    instance.rotation = {std::cos(rotation), std::sin(rotation)};
+    instance.scale = scale;
+    instance.animation = {static_cast<float>(animation), animationTime};
+    gpu.instances.push_back(instance);
+    ++m_statistics.submissions;
+    if (m_overlay)
+    {
+        FlushWorld();
+    }
+}
+
+void Renderer::FlushWorld()
+{
+    if (m_pendingOrder.empty())
+    {
+        return;
     }
     glUseProgram(m_worldProgram);
-    glUniform3f(m_worldOffset, offset.x, offset.y, offset.z);
-    glUniform2f(m_worldRotation, std::cos(rotation), std::sin(rotation));
     glUniform2f(m_worldProjection, m_zoom * 2 / m_width, m_zoom * 2 / m_height);
     glUniform1i(m_worldHdr, m_hdrScene && !m_overlay);
     glUniform1f(m_worldIntensity, m_postSettings.sceneIntensity);
-    glBindVertexArray(found->second.vao);
-    m_statistics.DrawArrays(GL_TRIANGLES, 0, found->second.count);
-    m_triangleCount += found->second.count / 3;
+    for (const auto& key : m_pendingOrder)
+    {
+        auto& gpu = m_meshCache.find(key)->second;
+        if (!gpu.vao)
+        {
+            glGenVertexArrays(1, &gpu.vao);
+            glGenBuffers(1, &gpu.vbo);
+            if (!gpu.vao || !gpu.vbo)
+            {
+                glDeleteVertexArrays(1, &gpu.vao);
+                glDeleteBuffers(1, &gpu.vbo);
+                gpu.vao = gpu.vbo = 0;
+                std::cerr << "Mesh GPU allocation failed: " << gpu.name << '\n';
+                Diagnostics::Get().Event(
+                    "gpu_mesh_allocation_failed id=" + std::to_string(gpu.id) + " asset=" + gpu.name);
+                gpu.instances.clear();
+                gpu.pendingOwner.reset();
+                continue;
+            }
+            gpu.count = static_cast<GLsizei>(gpu.pendingOwner->size());
+            glBindVertexArray(gpu.vao);
+            glBindBuffer(GL_ARRAY_BUFFER, gpu.vbo);
+            const auto bytes = gpu.pendingOwner->size() * sizeof(Vertex);
+            glBufferData(
+                GL_ARRAY_BUFFER,
+                static_cast<GLsizeiptr>(bytes),
+                gpu.pendingOwner->data(),
+                GL_STATIC_DRAW);
+            m_statistics.staticUploadBytes += bytes;
+            Diagnostics::Get().Event(
+                "gpu_mesh_upload id=" + std::to_string(gpu.id) + " asset=" + gpu.name +
+                " vertices=" + std::to_string(gpu.count) + " bytes=" + std::to_string(bytes));
+            auto attribute = [](GLuint location, GLint count, GLsizei stride, size_t offset, GLuint divisor)
+            {
+                glEnableVertexAttribArray(location);
+                glVertexAttribPointer(
+                    location,
+                    count,
+                    GL_FLOAT,
+                    GL_FALSE,
+                    stride,
+                    reinterpret_cast<void*>(offset));
+                glVertexAttribDivisor(location, divisor);
+            };
+            attribute(0, 3, sizeof(Vertex), offsetof(Vertex, position), 0);
+            attribute(1, 3, sizeof(Vertex), offsetof(Vertex, color), 0);
+            attribute(2, 2, sizeof(Vertex), offsetof(Vertex, uv), 0);
+            glBindBuffer(GL_ARRAY_BUFFER, m_instanceVbo);
+            attribute(3, 3, sizeof(MeshInstance), offsetof(MeshInstance, offset), 1);
+            attribute(4, 2, sizeof(MeshInstance), offsetof(MeshInstance, rotation), 1);
+            attribute(5, 3, sizeof(MeshInstance), offsetof(MeshInstance, scale), 1);
+            attribute(6, 2, sizeof(MeshInstance), offsetof(MeshInstance, animation), 1);
+        }
+        glBindVertexArray(gpu.vao);
+        glBindBuffer(GL_ARRAY_BUFFER, m_instanceVbo);
+        const auto bytes = gpu.instances.size() * sizeof(MeshInstance);
+        // Orphan the previous instance payload; static vertex buffers remain untouched.
+        glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(bytes), gpu.instances.data(), GL_STREAM_DRAW);
+        m_statistics.instanceUploadBytes += bytes;
+        m_statistics.instances += gpu.instances.size();
+        m_statistics
+            .DrawInstances(GL_TRIANGLES, gpu.count, static_cast<GLsizei>(gpu.instances.size()), m_overlay);
+        m_triangleCount += static_cast<size_t>(gpu.count) / 3 * gpu.instances.size();
+        m_batchRecords.push_back({gpu.id, gpu.name, static_cast<size_t>(gpu.count), gpu.instances.size()});
+        gpu.instances.clear();
+        gpu.pendingOwner.reset();
+    }
+    m_pendingOrder.clear();
 }
 
 Vec2 Renderer::Project(Vec3 p) const
@@ -616,7 +702,12 @@ void Renderer::Flush()
         static_cast<GLsizeiptr>(m_batch.size() * sizeof(Vertex)),
         m_batch.data(),
         GL_STREAM_DRAW);
-    m_statistics.DrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(m_batch.size()));
+    m_statistics.streamUploadBytes += m_batch.size() * sizeof(Vertex);
+    if (m_overlay)
+    {
+        m_statistics.uiVertices += m_batch.size();
+    }
+    m_statistics.DrawStream(GL_TRIANGLES, 0, static_cast<GLsizei>(m_batch.size()), m_overlay);
     m_triangleCount += m_batch.size() / 3;
     m_batch.clear();
 }
@@ -627,6 +718,7 @@ void Renderer::PresentScene()
     {
         return;
     }
+    FlushWorld();
     Flush();
     if (m_hdrScene)
     {

@@ -39,7 +39,7 @@ LevelMeshes::LevelMeshes()
             Cone(mesh, {p.x, 2.05f, p.z}, .45f, .65f, Gold, 5);
         }
 
-        enemies[variant] = CachedMesh(std::move(mesh));
+        enemies[variant] = CachedMesh(std::move(mesh), "enemy_variant_" + std::to_string(variant));
     }
     for (int variant = 0; variant < 2; ++variant)
     {
@@ -58,7 +58,7 @@ LevelMeshes::LevelMeshes()
                 {t.x + (radius - .12f) * std::cos(a), .59f, t.z + (radius - .12f) * std::sin(a)},
                 {1, .24f, .10f});
         }
-        warnings[variant] = CachedMesh(std::move(mesh));
+        warnings[variant] = CachedMesh(std::move(mesh), "warning_" + std::to_string(variant));
     }
     for (int weapon = 0; weapon < 2; ++weapon)
     {
@@ -74,7 +74,7 @@ LevelMeshes::LevelMeshes()
         {
             Cone(mesh, {p.x, y, p.z}, .23f, .42f, {.24f, .79f, .96f}, 5);
         }
-        drops[weapon] = CachedMesh(std::move(mesh));
+        drops[weapon] = CachedMesh(std::move(mesh), weapon ? "drop_weapon" : "drop_stone");
     }
     Mesh mesh;
     const float heading = 0;
@@ -91,5 +91,5 @@ LevelMeshes::LevelMeshes()
             {p.x + 2.3f * std::cos(a), 1.1f, p.z + 2.3f * std::sin(a)},
             Gold);
     }
-    slash = CachedMesh(std::move(mesh));
+    slash = CachedMesh(std::move(mesh), "melee_slash");
 }

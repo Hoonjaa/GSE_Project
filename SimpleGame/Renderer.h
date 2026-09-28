@@ -38,13 +38,39 @@ class CachedMesh
 public:
     CachedMesh() = default;
 
-    CachedMesh(Mesh vertices) : m_vertices(std::make_shared<const Mesh>(std::move(vertices)))
+    CachedMesh(Mesh vertices, std::string name = "procedural")
+        : m_vertices(std::make_shared<const Mesh>(std::move(vertices))), m_name(std::move(name))
     {
     }
 
 private:
     friend class Renderer;
+    friend class MeshCache;
     std::shared_ptr<const Mesh> m_vertices;
+    std::string m_name;
+};
+
+enum class MeshAnimation
+{
+    None = 0,
+    Waves = 1,
+    Flag = 2,
+    Gull = 3
+};
+
+struct MeshInstance
+{
+    Vec3 offset = {0, 0, 0};
+    Vec2 rotation = {1, 0};
+    Vec3 scale = {1, 1, 1};
+    Vec2 animation = {0, 0};
+};
+
+struct BatchRecord
+{
+    std::uint64_t meshId;
+    std::string name;
+    size_t vertices, instances;
 };
 struct FontAtlas;
 
@@ -68,7 +94,8 @@ public:
 
     bool IsInitialized() const
     {
-        return m_program != 0 && m_worldProgram != 0 && m_vao != 0 && m_vbo != 0 && m_fontReady;
+        return m_program != 0 && m_worldProgram != 0 && m_vao != 0 && m_vbo != 0 && m_instanceVbo != 0 &&
+               m_fontReady;
     }
 
     void Resize(int width, int height);
@@ -84,6 +111,13 @@ public:
 
     void Submit(const Mesh& mesh, Vec3 offset = {0, 0, 0}, float rotation = 0);
     void Submit(const CachedMesh& mesh, Vec3 offset = {0, 0, 0}, float rotation = 0);
+    void Submit(
+        const CachedMesh& mesh,
+        Vec3 offset,
+        float rotation,
+        Vec3 scale,
+        MeshAnimation animation,
+        float animationTime);
     void BeginOverlay();
     void Panel(float x, float y, float width, float height, Color color);
     // UTF-8 input; maxWidth > 0 enables character wrapping for dialogue panels.
@@ -110,21 +144,60 @@ public:
         return m_statistics.DrawCallCount();
     }
 
+    const RenderStatistics& Statistics() const
+    {
+        return m_statistics;
+    }
+
+    const std::vector<BatchRecord>& Batches() const
+    {
+        return m_batchRecords;
+    }
+
+    size_t ResidentMeshes() const
+    {
+        return m_meshCache.size();
+    }
+
+    bool HdrActive() const
+    {
+        return m_hdrScene;
+    }
+
+    float ZoomValue() const
+    {
+        return m_zoom;
+    }
+
+    bool BlurActive() const
+    {
+        return m_hdrScene && m_postSettings.edgeBlur && m_postSettings.blurStrength > 0 &&
+               m_postSettings.blurRadius > 0;
+    }
+
 private:
     void Flush();
+    void FlushWorld();
     void PresentScene();
-    GLuint m_program = 0, m_vao = 0, m_vbo = 0;
+    GLuint m_program = 0, m_vao = 0, m_vbo = 0, m_instanceVbo = 0;
 
     struct GpuMesh
     {
         GLuint vao = 0, vbo = 0;
         GLsizei count = 0;
+        std::uint64_t id = 0;
+        std::string name;
+        std::shared_ptr<const Mesh> pendingOwner;
+        std::vector<MeshInstance> instances;
     };
 
     using MeshKey = std::weak_ptr<const Mesh>;
     std::map<MeshKey, GpuMesh, std::owner_less<MeshKey>> m_meshCache;
+    std::vector<MeshKey> m_pendingOrder;
+    std::vector<BatchRecord> m_batchRecords;
+    std::uint64_t m_nextMeshId = 1;
     GLuint m_worldProgram = 0;
-    GLint m_worldOffset = -1, m_worldRotation = -1, m_worldProjection = -1;
+    GLint m_worldProjection = -1;
     GLint m_worldHdr = -1, m_worldIntensity = -1;
     int m_width, m_height;
     float m_zoom = 28;

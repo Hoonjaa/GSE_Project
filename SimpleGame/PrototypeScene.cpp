@@ -113,26 +113,30 @@ void Prototype::CreateActors()
             {-spread - .1f, .008f, z + .09f},
             {.34f, .70f, .73f});
     }
-    m_scene.Create<MeshActor>(m_shipActor, CachedMesh(std::move(shadow)), "선박 그림자");
-    m_wake = m_scene.Create<MeshActor>(m_shipActor, CachedMesh(std::move(wake)), "항적").Id();
-    m_shipBody = m_scene.Create<MeshActor>(m_shipActor, CachedMesh(Ship()), "선체").Id();
+    m_scene.Create<MeshActor>(m_shipActor, CachedMesh(std::move(shadow), "ship_shadow"), "선박 그림자");
+    m_wake = m_scene.Create<MeshActor>(m_shipActor, CachedMesh(std::move(wake), "ship_wake"), "항적").Id();
+    m_shipBody = m_scene.Create<MeshActor>(m_shipActor, CachedMesh(Ship(), "ship"), "선체").Id();
 
     m_playerActor = m_scene.Create<WorldActor>(m_actorsRoot, "플레이어").Id();
     Disc(marker, {0, 0, 0}, .46f, Gold, 24);
-    auto& markerActor = m_scene.Create<MeshActor>(m_playerActor, CachedMesh(std::move(marker)), "발밑 표시");
+    auto& markerActor =
+        m_scene.Create<MeshActor>(m_playerActor, CachedMesh(std::move(marker), "player_marker"), "발밑 표시");
     markerActor.transform.position.y = .58f;
-    m_playerBody =
-        m_scene.Create<MeshActor>(m_playerActor, CachedMesh(Character({.17f, .43f, .63f})), "플레이어 모델")
-            .Id();
+    m_playerBody = m_scene
+                       .Create<MeshActor>(
+                           m_playerActor,
+                           CachedMesh(Character({.17f, .43f, .63f}), "player"),
+                           "플레이어 모델")
+                       .Id();
     Box(sword, {.32f, .5f, -.55f}, {.12f, .12f, .9f}, {.83f, .91f, .95f});
     Box(sword, {.20f, .48f, .1f}, {.36f, .16f, .1f}, Gold);
-    m_scene.Create<MeshActor>(m_playerBody, CachedMesh(std::move(sword)), "장착 무기");
+    m_scene.Create<MeshActor>(m_playerBody, CachedMesh(std::move(sword), "equipped_sword"), "장착 무기");
 
     auto& harbor = m_scene.Create<WorldActor>(m_actorsRoot, "항구 주민 및 장식");
     m_harbor = harbor.Id();
     harbor.location.x = 18.3;
     harbor.location.z = 18.9;
-    const CachedMesh npc(Character({.77f, .34f, .22f}));
+    const CachedMesh npc(Character({.77f, .34f, .22f}), "harbor_npc");
     auto& first = m_scene.Create<MeshActor>(m_harbor, npc, "항구 주민");
     first.transform.position = {0, .57f, 0};
     first.transform.rotation = .6f;
