@@ -17,6 +17,7 @@ struct GameplayContext
     int playerLevel = 1;
     std::function<void(int)> hitPlayer, collect;
     void Step(Vec3& position, Vec3 target, float distance);
+    void Step(Vec3& position, Vec3 target, float distance, const std::vector<int>& targetFlow);
 };
 
 struct LevelMeshes
@@ -39,6 +40,9 @@ public:
     float hp, maxHp, cooldown = 0, windup = 0, respawn = 0, flash = 0;
 
 private:
+    void ReturnHome(float dt);
+    bool m_returning = false;
+    std::vector<int> m_homeFlow;
     GameplayContext& m_context;
     CachedMesh m_normal, m_flash, m_warning;
 };

@@ -38,14 +38,6 @@ LevelOneTerrain::LevelOneTerrain() : m_land(Size * Size, 0), m_blocked(Size * Si
             const float radius = 45 + 2 * std::sin(a * 3 + phase) + std::cos(a * 5 - phase);
             const int i = z * Size + x;
             m_land[i] = dx * dx + dz * dz < radius * radius;
-            // Reserve wide central corridors and the harbor/safe spawn before decorating.
-            const bool reserved = std::abs(dx) < 4 || std::abs(dz) < 4 ||
-                                  (X > 7 && X < 26 && Z > 7 && Z < 27) ||
-                                  (dx * dx + (Z + 12) * (Z + 12) < 64);
-            if (m_land[i] && !reserved && random() % 100 < 7)
-            {
-                m_blocked[i] = 1;
-            }
         }
     }
     // Obstacles in the original harbor use the same cells for rendering and collision.
@@ -66,31 +58,16 @@ LevelOneTerrain::LevelOneTerrain() : m_land(Size * Size, 0), m_blocked(Size * Si
             }
         }
     }
-    // Validate reachability from the actual spawn. Remove random blockers if needed.
+    // Keep building collisions, but do not generate rock obstacles.
+    // Validate reachability from the actual spawn.
     std::vector<int> reachable;
     Flow(22, 17.75f, reachable);
-    bool disconnected = false;
-    for (int i = 0; i < Size * Size; ++i)
-    {
-        disconnected |= m_land[i] && !m_blocked[i] && reachable[i] < 0;
-    }
-    if (disconnected)
-    {
-        for (auto& block : m_blocked)
-        {
-            if (block == 1)
-            {
-                block = 0;
-            }
-        }
-        Flow(22, 17.75f, reachable);
-    }
-    // Unreachable fringe cells are not playable and never receive enemies or loot.
+    // Trim disconnected fringe land instead of turning it into rocks/invisible walls.
     for (int i = 0; i < Size * Size; ++i)
     {
         if (m_land[i] && !m_blocked[i] && reachable[i] < 0)
         {
-            m_blocked[i] = 1;
+            m_land[i] = 0;
         }
         const auto p = Center(i);
         if (reachable[i] >= 0 && Walk(p.x, p.z))
@@ -115,10 +92,6 @@ LevelOneTerrain::LevelOneTerrain() : m_land(Size * Size, 0), m_blocked(Size * Si
             const Color color = radius > 39 || path ? Color{.86f + variation, .77f + variation, .52f}
                                                     : Color{.43f + variation, .64f + variation, .30f};
             Quad(mesh, {X, .55f, Z}, {X + 1, .55f, Z}, {X + 1, .55f, Z + 1}, {X, .55f, Z + 1}, color);
-            if (m_blocked[i] == 1)
-            {
-                Box(mesh, {X, .55f, Z}, {1, .7f + variation * 8, 1}, {.47f, .53f, .42f});
-            }
             for (const auto& d : {std::pair<int, int>{1, 0}, {-1, 0}, {0, 1}, {0, -1}})
             {
                 const int nx = x + d.first, nz = z + d.second;

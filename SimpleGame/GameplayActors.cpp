@@ -15,6 +15,11 @@ namespace
 
 void GameplayContext::Step(Vec3& position, Vec3 target, float distance)
 {
+    Step(position, target, distance, flow);
+}
+
+void GameplayContext::Step(Vec3& position, Vec3 target, float distance, const std::vector<int>& targetFlow)
+{
     float length = Distance(position, target);
     if (length < .001f)
     {
@@ -23,7 +28,8 @@ void GameplayContext::Step(Vec3& position, Vec3 target, float distance)
     if (!terrain.Segment(position.x, position.z, target.x, target.z))
     {
         const int index = terrain.Index(position.x, position.z);
-        if (index < 0 || flow.empty())
+        if (index < 0 ||
+            targetFlow.size() != static_cast<size_t>(LevelOneTerrain::Size * LevelOneTerrain::Size))
         {
             return;
         }
@@ -37,7 +43,7 @@ void GameplayContext::Step(Vec3& position, Vec3 target, float distance)
                 continue;
             }
             const int next = z * LevelOneTerrain::Size + x;
-            if (flow[next] >= 0 && (flow[best] < 0 || flow[next] < flow[best]))
+            if (targetFlow[next] >= 0 && (targetFlow[best] < 0 || targetFlow[next] < targetFlow[best]))
             {
                 best = next;
             }
@@ -56,7 +62,7 @@ void GameplayContext::Step(Vec3& position, Vec3 target, float distance)
     }
     const float step = (std::min)(length, distance);
     const float dx = (target.x - position.x) / length * step, dz = (target.z - position.z) / length * step;
-    if (terrain.Walk(position.x + dx, position.z + dz))
+    if (terrain.Segment(position.x, position.z, position.x + dx, position.z + dz))
     {
         position.x += dx;
         position.z += dz;
@@ -95,12 +101,44 @@ bool EnemyActor::TakeDamage(int damage)
 
 void EnemyActor::Recover()
 {
+    m_returning = false;
+    m_homeFlow.clear();
     windup = 0;
     cooldown = 1;
     if (hp > 0)
     {
         transform.position = home;
         hp = maxHp;
+    }
+}
+
+void EnemyActor::ReturnHome(float dt)
+{
+    windup = 0;
+    // Preserve the existing out-of-combat health reset; only locomotion changes.
+    hp = maxHp;
+    if (Distance(transform.position, home) <= .001f)
+    {
+        transform.position = home;
+        m_returning = false;
+        return;
+    }
+    if (!m_returning)
+    {
+        m_returning = true;
+        m_homeFlow.clear();
+    }
+    // The shared flow field points to the player. Build a separate home field only
+    // when direct movement is blocked, and reuse it for the rest of this return.
+    if (m_homeFlow.empty() &&
+        !m_context.terrain.Segment(transform.position.x, transform.position.z, home.x, home.z))
+    {
+        m_context.terrain.Flow(home.x, home.z, m_homeFlow);
+    }
+    m_context.Step(transform.position, home, (std::max)(0.f, dt) * (boss ? 1.5f : 1.9f), m_homeFlow);
+    if (Distance(transform.position, home) <= .001f)
+    {
+        transform.position = home;
     }
 }
 
@@ -120,6 +158,8 @@ void EnemyActor::Update(float dt)
                 transform.position = home;
                 hp = maxHp;
                 cooldown = 1;
+                m_returning = false;
+                m_homeFlow.clear();
             }
         }
         return;
@@ -127,11 +167,10 @@ void EnemyActor::Update(float dt)
     const bool engaged = active && !safe && Distance(player, home) < (boss ? 13 : 12);
     if (!engaged)
     {
-        windup = 0;
-        transform.position = home;
-        hp = maxHp;
+        ReturnHome(dt);
         return;
     }
+    m_returning = false;
     if (windup > 0)
     {
         windup -= dt;
