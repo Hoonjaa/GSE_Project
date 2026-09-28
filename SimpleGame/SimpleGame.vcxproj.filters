@@ -18,8 +18,8 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="..\PROTOTYPE_README.txt" />
-    <Text Include="..\LEVEL_ONE_README.txt" />
+    <Text Include="..\doc\PROTOTYPE_README.txt" />
+    <Text Include="..\doc\LEVEL_ONE_README.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">

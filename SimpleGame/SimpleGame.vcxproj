@@ -152,11 +152,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <Text Include="..\PROTOTYPE_README.txt" />
-    <Text Include="..\LEVEL_ONE_README.txt" />
-    <Text Include="..\SCENE_GRAPH_README.txt" />
-    <Text Include="..\DRAW_CALL_OPTIMIZATION_REPORT.md" />
-    <Text Include="..\PERFORMANCE_ANALYSIS_LOG.md" />
+    <Text Include="..\doc\PROTOTYPE_README.txt" />
+    <Text Include="..\doc\LEVEL_ONE_README.txt" />
+    <Text Include="..\doc\SCENE_GRAPH_README.txt" />
+    <Text Include="..\doc\DRAW_CALL_OPTIMIZATION_REPORT.md" />
+    <Text Include="..\doc\PERFORMANCE_ANALYSIS_LOG.md" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Actor.h" />
