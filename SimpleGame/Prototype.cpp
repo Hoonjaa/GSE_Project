@@ -11,7 +11,7 @@ namespace
     constexpr float Pi = 3.14159265359f;
 }
 
-Prototype::Prototype() : m_world(m_scene), m_levelOne(m_scene, m_world.Tutorial())
+Prototype::Prototype() : m_world(m_scene), m_levelOne(m_scene, m_world.Tutorial(), m_economy)
 {
     CreateActors();
     Reset();
@@ -19,16 +19,13 @@ Prototype::Prototype() : m_world(m_scene), m_levelOne(m_scene, m_world.Tutorial(
 
 void Prototype::Reset()
 {
-    Player().location = WorldPosition();
-    Player().location.x = 22;
-    Player().location.z = 17.75;
-    ShipActor().location = WorldPosition();
-    ShipActor().location.Move(67 - ShipActor().location.x, 0);
-    ShipActor().location.z = 20.3;
+    Player().location = m_world.StartSpawn();
+    ShipActor().location = m_world.StartShip(EconomyRules::SailboatLength);
+    CloseServiceMenu();
     m_camera = Player().location;
     m_sailing = false;
     m_heading = 0;
-    m_shipHeading = 0;
+    m_shipHeading = m_world.OutboundHeading({0, 0});
     m_keys.fill(false);
     m_levelOne.Recover();
     m_message = KoreanText::Welcome;
@@ -50,6 +47,11 @@ void Prototype::Key(unsigned char key, bool down)
     m_keys[key] = down;
     if (!pressed)
     {
+        return;
+    }
+    if (m_service.kind != TownServiceKind::None)
+    {
+        ServiceKey(key);
         return;
     }
     switch (key)
@@ -113,8 +115,16 @@ void Prototype::Zoom(int direction)
 
 void Prototype::MouseAttack(int x, int y, const Renderer& renderer)
 {
+    if (m_service.kind != TownServiceKind::None)
+    {
+        return;
+    }
     if (m_hud && (y > renderer.Height() - 122 || (x < 445 && y < 255) ||
                   (renderer.Width() > 760 && x > renderer.Width() - 192 && y < 220)))
+    {
+        return;
+    }
+    if (m_hud && m_world.CurrentIsland(ActivePosition()) && x >= 20 && x <= 450 && y >= 265 && y <= 351)
     {
         return;
     }
@@ -135,8 +145,28 @@ void Prototype::Interact()
 {
     if (!m_sailing)
     {
+        m_service = m_world.ServiceAt(Player().location);
+        if (m_service.kind != TownServiceKind::None)
+        {
+            ClearInput();
+            m_serviceMessage.clear();
+            return;
+        }
         const Vec3 d = ShipActor().location.RelativeTo(Player().location);
-        if (d.x * d.x + d.z * d.z < 3.4f * 3.4f)
+        if (!m_economy.HasShip())
+        {
+            m_message = "조선소 구역에서 E를 눌러 50골드에 돛단배를 구매하세요.";
+            m_messageTime = 5;
+            return;
+        }
+        const float c = std::cos(m_shipHeading), s = std::sin(m_shipHeading);
+        const float x = d.x * c + d.z * s, z = -d.x * s + d.z * c;
+        const float halfLength = EconomyRules::SailboatLength * .5f;
+        const float halfBeam = EconomyRules::SailboatLength * (1.7f / 3.85f) * .5f;
+        const float reach = 1.2f;
+        if ((x * x) / ((halfBeam + reach) * (halfBeam + reach)) +
+                (z * z) / ((halfLength + reach) * (halfLength + reach)) <
+            1)
         {
             m_sailing = true;
             m_message = KoreanText::Boarded;
@@ -150,12 +180,16 @@ void Prototype::Interact()
     {
         // Search nearby shore/dock points without moving or discarding the ship.
         bool landed = false;
-        for (float distance = 1.6f; distance <= 3.25f && !landed; distance += .2f)
+        for (float margin = .35f; margin <= 1.25f && !landed; margin += .15f)
         {
             for (int i = 0; i < 32 && !landed; ++i)
             {
                 auto candidate = ShipActor().location;
-                candidate.Move(distance * std::cos(2 * Pi * i / 32), distance * std::sin(2 * Pi * i / 32));
+                const float a = 2 * Pi * i / 32;
+                const float x = (EconomyRules::SailboatLength * (1.7f / 3.85f) * .5f + margin) * std::cos(a);
+                const float z = (EconomyRules::SailboatLength * .5f + margin) * std::sin(a);
+                const float c = std::cos(m_shipHeading), s = std::sin(m_shipHeading);
+                candidate.Move(x * c - z * s, x * s + z * c);
                 if (m_world.CanWalk(candidate))
                 {
                     Player().location = candidate;
@@ -180,7 +214,8 @@ void Prototype::Move(double dx, double dz)
         }
         auto next = position;
         next.Move(x, z);
-        if (m_sailing ? m_world.CanSail(next) : m_world.CanWalk(next))
+        if (m_sailing ? m_world.CanSail(next, m_shipHeading, EconomyRules::SailboatLength)
+                      : m_world.CanWalk(next))
         {
             position = next;
             return true;
@@ -221,8 +256,21 @@ void Prototype::Update(double dt, int width, int height)
     // Covers the inverse isometric viewport, with a margin for scenery and camera lag.
     const int radius = static_cast<int>(std::ceil((width * .354 + height * .613) / (m_zoom * ChunkSize))) + 1;
     m_world.Update(ActivePosition(), radius);
+    m_levelOne.SetActive(m_world.TutorialActive());
+    m_levelOne.SetActiveRegion(
+        [this](Vec3 position)
+        {
+            WorldPosition point;
+            point.x = point.z = 0;
+            point.Move(position.x, position.z);
+            return m_world.IsActive(point);
+        });
     double horizontal = (m_keys['d'] ? 1.0 : 0) - (m_keys['a'] ? 1.0 : 0);
     double vertical = (m_keys['s'] ? 1.0 : 0) - (m_keys['w'] ? 1.0 : 0);
+    if (m_service.kind != TownServiceKind::None)
+    {
+        horizontal = vertical = 0;
+    }
     const double length = std::sqrt(horizontal * horizontal + vertical * vertical);
     m_moving = false;
     if (length > 0)
@@ -235,7 +283,7 @@ void Prototype::Update(double dt, int width, int height)
         {
             m_heading = static_cast<float>(std::atan2(dx, -dz));
         }
-        if (m_sailing)
+        if (m_sailing && m_world.CanSail(ShipActor().location, m_heading, EconomyRules::SailboatLength))
         {
             m_shipHeading = m_heading;
         }
@@ -265,7 +313,9 @@ void Prototype::Render(Renderer& r)
     WorldPosition origin;
     origin.x = 0;
     origin.z = 0;
-    m_levelOne.Prepare(origin.RelativeTo(m_camera), m_hud && !m_postHud);
+    m_levelOne.Prepare(
+        origin.RelativeTo(m_camera),
+        m_hud && !m_postHud && m_service.kind == TownServiceKind::None);
     PrepareActors();
     m_scene.Render(r);
     r.BeginOverlay();

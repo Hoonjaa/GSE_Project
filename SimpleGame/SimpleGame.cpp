@@ -76,6 +76,10 @@ namespace
     {
         if (key == 27)
         {
+            if (game && game->CloseServiceMenu())
+            {
+                return;
+            }
             glutLeaveMainLoop();
             return;
         }

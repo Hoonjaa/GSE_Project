@@ -1,6 +1,7 @@
 #pragma once
 #include "SceneGraph.h"
 #include "LevelOneTerrain.h"
+#include "PlayerEconomy.h"
 #include <functional>
 
 // Per-frame inputs/services, independent of the LevelOne progression rules.
@@ -16,6 +17,7 @@ struct GameplayContext
     bool active = false, safe = false, playerDead = false;
     int playerLevel = 1;
     std::function<void(int)> hitPlayer, collect;
+    std::function<void(CoralLoot)> collectTrophy;
     void Step(Vec3& position, Vec3 target, float distance);
     void Step(Vec3& position, Vec3 target, float distance, const std::vector<int>& targetFlow);
 };
@@ -23,7 +25,7 @@ struct GameplayContext
 struct LevelMeshes
 {
     LevelMeshes();
-    CachedMesh enemies[4], warnings[2], drops[2], slash;
+    CachedMesh enemies[4], warnings[2], drops[2], trophies[2], slash;
 };
 
 class EnemyActor : public Actor
@@ -51,12 +53,15 @@ class DropActor : public MeshActor
 {
 public:
     DropActor(GameplayContext& context, const LevelMeshes& meshes, Vec3 position, int power, bool keep);
+    DropActor(GameplayContext& context, const LevelMeshes& meshes, Vec3 position, CoralLoot kind);
     void Update(float dt) override;
     void Render(Renderer& renderer, const ActorTransform& world) const override;
 
 private:
     GameplayContext& m_context;
     int weapon;
+    bool m_trophy = false;
+    CoralLoot m_trophyKind = CoralLoot::Normal;
     float age = 0, speed = 0;
     bool collected = false, attracted = false, persistent;
 };

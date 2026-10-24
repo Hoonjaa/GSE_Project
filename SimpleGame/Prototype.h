@@ -15,6 +15,7 @@ public:
     void ClearInput();
     void Zoom(int direction);
     void MouseAttack(int x, int y, const Renderer& renderer);
+    bool CloseServiceMenu();
 
     size_t ActorCount() const
     {
@@ -35,6 +36,10 @@ private:
     void CreateActors();
     void PrepareActors();
     void RenderHud(Renderer& renderer);
+    void RenderServiceMenu(Renderer& renderer) const;
+    void ServiceKey(unsigned char key);
+    bool ShipAtService() const;
+    void BuySailboat();
     WorldActor& Player();
     const WorldActor& Player() const;
     WorldActor& ShipActor();
@@ -50,11 +55,15 @@ private:
 
     SceneGraph m_scene;
     World m_world;
+    PlayerEconomy m_economy;
     LevelOne m_levelOne;
     WorldPosition m_camera;
     ActorId m_actorsRoot = NoActor, m_playerActor = NoActor, m_shipActor = NoActor;
-    ActorId m_playerBody = NoActor, m_shipBody = NoActor, m_wake = NoActor, m_harbor = NoActor;
+    ActorId m_playerBody = NoActor, m_shipBody = NoActor, m_shadow = NoActor, m_wake = NoActor,
+            m_harbor = NoActor;
     std::array<bool, 256> m_keys = {};
+    TownInteraction m_service;
+    std::string m_serviceMessage;
     bool m_sailing = false, m_grid = false, m_hud = true, m_moving = false;
     bool m_postHud = false;
     float m_zoom = 30, m_time = 0, m_heading = 0, m_shipHeading = 0, m_messageTime = 0;

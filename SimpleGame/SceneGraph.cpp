@@ -121,7 +121,7 @@ void SceneGraph::Update(float dt)
     std::function<void(ActorId)> visit = [&](ActorId id)
     {
         const Actor* actor = Find(id);
-        if (!actor)
+        if (!actor || !actor->enabled)
         {
             return;
         }

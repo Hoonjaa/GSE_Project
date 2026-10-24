@@ -83,6 +83,18 @@ public:
     CachedMesh mesh;
 };
 
+class ScaledMeshActor : public MeshActor
+{
+public:
+    ScaledMeshActor(CachedMesh resource, Vec3 size, std::string name = {})
+        : MeshActor(std::move(resource), std::move(name)), scale(size)
+    {
+    }
+
+    void Render(Renderer& renderer, const ActorTransform& world) const override;
+    Vec3 scale;
+};
+
 // Custom dynamic geometry and screen-space UI can participate in the same lifecycle.
 class CallbackActor : public Actor
 {

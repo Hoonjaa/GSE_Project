@@ -15,11 +15,11 @@ namespace
         return std::hypot(a.x, a.z);
     }
 
-    const Vec3 Safe = {22, .55f, 17.75f};
 }
 
-LevelOne::LevelOne(SceneGraph& scene, const LevelOneTerrain& terrain)
-    : m_scene(scene), m_terrain(terrain), m_context(terrain), m_random(terrain.Seed() ^ 731u)
+LevelOne::LevelOne(SceneGraph& scene, const LevelOneTerrain& terrain, PlayerEconomy& economy)
+    : m_scene(scene), m_economy(economy), m_terrain(terrain), m_context(terrain),
+      m_random(terrain.Seed() ^ 731u)
 {
     m_root = m_scene.Create<Actor>(NoActor, "레벨 1").Id();
     m_context.hitPlayer = [this](int damage)
@@ -30,12 +30,28 @@ LevelOne::LevelOne(SceneGraph& scene, const LevelOneTerrain& terrain)
     {
         Collect(weapon);
     };
+    m_context.collectTrophy = [this](CoralLoot kind)
+    {
+        m_economy.Collect(kind);
+        Notify(std::string(EconomyRules::LootName(kind)) + " 획득! 상점에서 판매할 수 있습니다.");
+    };
     const auto& cells = terrain.SpawnCells();
+    float bossDistance = 1e9f;
+    for (int i : cells)
+    {
+        const auto point = terrain.Center(i);
+        const float distance = Distance(point, {16.5f, .55f, -11.5f});
+        if (distance < bossDistance)
+        {
+            bossDistance = distance;
+            m_bossSpawn = point;
+        }
+    }
     // Bounded sampling: every accepted position belongs to the spawn's connected component.
     for (int attempt = 0; attempt < 3000 && m_enemies.size() < 32 && !cells.empty(); ++attempt)
     {
         const auto position = terrain.Center(cells[m_random() % cells.size()]);
-        if (Distance(position, Safe) < 12 || Distance(position, {16, .55f, -12}) < 9)
+        if (Distance(position, terrain.SpawnPoint()) < 12 || Distance(position, m_bossSpawn) < 9)
         {
             continue;
         }
@@ -55,7 +71,7 @@ LevelOne::LevelOne(SceneGraph& scene, const LevelOneTerrain& terrain)
                 .Id());
     }
     m_enemies.push_back(
-        m_scene.Create<EnemyActor>(m_root, m_context, m_meshes, true, Vec3{16.5f, .55f, -11.5f}, 360.f).Id());
+        m_scene.Create<EnemyActor>(m_root, m_context, m_meshes, true, m_bossSpawn, 360.f).Id());
     m_effectsRoot = m_scene.Create<Actor>(m_root, "전투 효과 및 드랍").Id();
     m_slash = m_scene.Create<SlashActor>(m_effectsRoot, m_meshes.slash).Id();
     auto& hud = m_scene.Create<CallbackActor>(m_root, "레벨 상태 UI");
@@ -63,7 +79,8 @@ LevelOne::LevelOne(SceneGraph& scene, const LevelOneTerrain& terrain)
     {
         Overlay(renderer);
     };
-    terrain.Flow(Safe.x, Safe.z, m_context.flow);
+    const auto spawn = terrain.SpawnPoint();
+    terrain.Flow(spawn.x, spawn.z, m_context.flow);
     Notify("레벨 1 · 새싹 탐험가의 섬 — 섬의 게를 처치하고 장비를 모으세요.");
 }
 
@@ -137,6 +154,18 @@ void LevelOne::Reward(const EnemyActor& enemy)
         Notify("보스 '산호갑각 대장' 처치! 레벨 1 완료 · 영웅 무기와 강화석을 회수하세요.");
     }
     PruneHandles(m_drops);
+    const auto trophy = enemy.boss ? CoralLoot::Boss : CoralLoot::Normal;
+    if (m_drops.size() < 512)
+    {
+        m_drops.push_back(
+            m_scene.Create<DropActor>(m_effectsRoot, m_context, m_meshes, enemy.transform.position, trophy)
+                .Id());
+    }
+    else
+    {
+        // Preserve the guaranteed trophy without exceeding the existing Actor cap.
+        m_context.collectTrophy(trophy);
+    }
     auto drop = [&](int weapon)
     {
         if (m_drops.size() >= 512)
@@ -185,7 +214,7 @@ void LevelOne::Attack(Vec3 player, Vec3 aim, bool sailing)
             continue;
         }
         auto& enemy = *found;
-        if (enemy.hp <= 0)
+        if (!enemy.enabled || enemy.hp <= 0)
         {
             continue;
         }
@@ -226,6 +255,29 @@ void LevelOne::Prepare(Vec3 offset, bool showHud)
 {
     m_scene.Find(m_root)->transform.position = offset;
     m_showHud = showHud;
+}
+
+void LevelOne::SetActive(bool active)
+{
+    auto* root = m_scene.Find(m_root);
+    root->enabled = active;
+    root->visible = active;
+}
+
+void LevelOne::SetActiveRegion(const std::function<bool(Vec3)>& isActive)
+{
+    for (const auto* handles : {&m_enemies, &m_drops, &m_numbers})
+    {
+        for (ActorId id : *handles)
+        {
+            if (auto* actor = m_scene.Find(id))
+            {
+                const bool active = isActive(actor->transform.position);
+                actor->enabled = active;
+                actor->visible = active;
+            }
+        }
+    }
 }
 
 void LevelOne::PruneHandles(std::vector<ActorId>& handles)
@@ -287,7 +339,7 @@ void LevelOne::BeginFrame(float dt, Vec3 player, bool sailing)
     m_flowTime -= dt;
     m_context.player = player;
     m_context.active = !sailing && m_terrain.Walk(player.x, player.z);
-    m_context.safe = Distance(player, Safe) < 9;
+    m_context.safe = m_terrain.IsVillage(player.x, player.z);
     m_context.playerLevel = m_level;
     m_context.playerDead = m_health <= 0;
     if (m_context.active && m_flowTime <= 0)

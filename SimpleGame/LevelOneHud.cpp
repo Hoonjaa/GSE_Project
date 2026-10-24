@@ -4,7 +4,7 @@
 
 namespace
 {
-    const Vec3 Safe = {22, .55f, 17.75f};
+
     const Color Paper = {.96f, .90f, .72f}, Ink = {.07f, .19f, .23f}, Gold = {.98f, .71f, .32f};
 }
 
@@ -41,8 +41,9 @@ void LevelOne::Overlay(Renderer& renderer) const
     renderer.Text(
         34,
         214,
-        m_bossDefeated ? "보스 처치 완료! 계속 파밍할 수 있습니다."
-                       : "목표: 파밍 → 레벨 3·무기 강화 → 북쪽 보스",
+        !m_economy.HasShip() ? "목표: 전리품 판매 → 50골드 → 조선소 돛단배 구매"
+                             : (m_bossDefeated ? "보스 처치 완료! 계속 파밍할 수 있습니다."
+                                               : "목표: 파밍 → 레벨 3·무기 강화 → 북쪽 보스"),
         Gold,
         1.5f);
     renderer.Text(34, 234, "좌클릭 근접 공격 / 붉은 원에서 벗어나세요", Paper, 1.4f);
@@ -59,16 +60,17 @@ void LevelOne::Map(Renderer& renderer, float left, float top, float extent, Vec3
     const float scale = extent / LevelOneTerrain::Size;
     auto marker = [&](Vec3 p, Color color, float size)
     {
-        const float x = (p.x - LevelOneTerrain::Min) * scale, z = (p.z - LevelOneTerrain::Min) * scale;
+        const float x = (p.x - m_terrain.MapOrigin()) / m_terrain.CellSize() * scale;
+        const float z = (p.z - m_terrain.MapOrigin()) / m_terrain.CellSize() * scale;
         if (x >= 0 && z >= 0 && x < extent - size && z < extent - size)
         {
             renderer.Panel(left + x, top + z, size, size, color);
         }
     };
-    marker(Safe, Gold, 5);
+    marker(m_terrain.SpawnPoint(), Gold, 5);
     if (!m_bossDefeated)
     {
-        marker({16, .55f, -12}, {.95f, .22f, .17f}, 6);
+        marker(m_bossSpawn, {.95f, .22f, .17f}, 6);
     }
     marker(player, Paper, 5);
 }

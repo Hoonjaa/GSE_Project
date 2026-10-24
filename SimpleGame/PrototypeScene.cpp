@@ -99,7 +99,7 @@ void Prototype::CreateActors()
 {
     using namespace Geometry;
     m_actorsRoot = m_scene.Create<Actor>(NoActor, "플레이어 및 항구").Id();
-    m_shipActor = m_scene.Create<WorldActor>(m_actorsRoot, "플레이어 선박").Id();
+    m_shipActor = m_scene.Create<WorldActor>(m_actorsRoot, "8m 돛단배").Id();
     Mesh shadow, wake, marker, sword;
     Disc(shadow, {0, .006f, 0}, 1.5f, {.04f, .34f, .43f}, 24);
     for (int n = 0; n < 6; ++n)
@@ -113,29 +113,73 @@ void Prototype::CreateActors()
             {-spread - .1f, .008f, z + .09f},
             {.34f, .70f, .73f});
     }
-    m_scene.Create<MeshActor>(m_shipActor, CachedMesh(std::move(shadow), "ship_shadow"), "선박 그림자");
-    m_wake = m_scene.Create<MeshActor>(m_shipActor, CachedMesh(std::move(wake), "ship_wake"), "항적").Id();
-    m_shipBody = m_scene.Create<MeshActor>(m_shipActor, CachedMesh(Ship(), "ship"), "선체").Id();
+    m_shadow = m_scene
+                   .Create<ScaledMeshActor>(
+                       m_shipActor,
+                       CachedMesh(std::move(shadow), "ship_shadow"),
+                       Vec3{1, 1, 1},
+                       "선박 그림자")
+                   .Id();
+    m_wake = m_scene
+                 .Create<ScaledMeshActor>(
+                     m_shipActor,
+                     CachedMesh(std::move(wake), "ship_wake"),
+                     Vec3{1, 1, 1},
+                     "항적")
+                 .Id();
+    m_shipBody = m_scene
+                     .Create<ScaledMeshActor>(
+                         m_shipActor,
+                         CachedMesh(
+                             []
+                             {
+                                 Mesh mesh = Ship();
+                                 for (auto& vertex : mesh)
+                                 {
+                                     vertex.position.z += .125f;
+                                 }
+                                 return mesh;
+                             }(),
+                             "ship_centered"),
+                         Vec3{1, 1, 1},
+                         "선체")
+                     .Id();
 
     m_playerActor = m_scene.Create<WorldActor>(m_actorsRoot, "플레이어").Id();
-    Disc(marker, {0, 0, 0}, .46f, Gold, 24);
+    Disc(marker, {0, 0, 0}, .23f, Gold, 24);
     auto& markerActor =
         m_scene.Create<MeshActor>(m_playerActor, CachedMesh(std::move(marker), "player_marker"), "발밑 표시");
     markerActor.transform.position.y = .58f;
+    Mesh playerModel = Character({.17f, .43f, .63f});
+    float bodyRadius = 0;
+    for (const auto& vertex : playerModel)
+    {
+        bodyRadius = (std::max)(bodyRadius, std::hypot(vertex.position.x, vertex.position.z));
+    }
+    const float playerScale = MapCatalog::PlayerRadius / bodyRadius;
+    for (auto& vertex : playerModel)
+    {
+        vertex.position.x *= playerScale;
+        vertex.position.z *= playerScale;
+    }
     m_playerBody = m_scene
                        .Create<MeshActor>(
                            m_playerActor,
-                           CachedMesh(Character({.17f, .43f, .63f}), "player"),
+                           CachedMesh(std::move(playerModel), "player_diameter_0_4m"),
                            "플레이어 모델")
                        .Id();
     Box(sword, {.32f, .5f, -.55f}, {.12f, .12f, .9f}, {.83f, .91f, .95f});
     Box(sword, {.20f, .48f, .1f}, {.36f, .16f, .1f}, Gold);
+    for (auto& vertex : sword)
+    {
+        vertex.position.x *= playerScale;
+        vertex.position.z *= playerScale;
+    }
     m_scene.Create<MeshActor>(m_playerBody, CachedMesh(std::move(sword), "equipped_sword"), "장착 무기");
 
     auto& harbor = m_scene.Create<WorldActor>(m_actorsRoot, "항구 주민 및 장식");
     m_harbor = harbor.Id();
-    harbor.location.x = 18.3;
-    harbor.location.z = 18.9;
+    harbor.location = m_world.StartVillage();
     const CachedMesh npc(Character({.77f, .34f, .22f}), "harbor_npc");
     auto& first = m_scene.Create<MeshActor>(m_harbor, npc, "항구 주민");
     first.transform.position = {0, .57f, 0};
@@ -162,7 +206,15 @@ void Prototype::PrepareActors()
     auto& ship = ShipActor();
     ship.Prepare(m_camera);
     ship.transform.rotation = m_shipHeading;
-    ship.visible = std::abs(ship.transform.position.x) < 500 && std::abs(ship.transform.position.z) < 500;
+    ship.visible = m_world.IsActive(ship.location);
+    ship.enabled = ship.visible;
+    const float shipScale = EconomyRules::SailboatLength / 3.85f;
+    m_scene.Get<ScaledMeshActor>(m_shipBody)->scale = {shipScale, shipScale, shipScale};
+    m_scene.Get<ScaledMeshActor>(m_wake)->scale = {shipScale, 1, shipScale};
+    m_scene.Get<ScaledMeshActor>(m_shadow)->scale = {
+        EconomyRules::SailboatLength * (1.7f / 3.85f) / 3,
+        1,
+        EconomyRules::SailboatLength / 3};
     m_scene.Find(m_shipBody)->transform.position.y = .045f * std::sin(m_time * 2);
     m_scene.Find(m_wake)->visible = m_sailing && m_moving;
 
@@ -175,6 +227,6 @@ void Prototype::PrepareActors()
 
     auto* harbor = m_scene.Get<WorldActor>(m_harbor);
     harbor->Prepare(m_camera);
-    harbor->visible =
-        std::abs(harbor->transform.position.x) < 90 && std::abs(harbor->transform.position.z) < 90;
+    harbor->visible = m_world.IsActive(harbor->location);
+    harbor->enabled = harbor->visible;
 }

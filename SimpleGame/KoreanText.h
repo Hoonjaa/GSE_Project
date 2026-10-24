@@ -6,16 +6,16 @@ namespace KoreanText
 {
     constexpr const char* Title = "새싹 탐험가의 섬";
     constexpr const char* Subtitle = "대항해 시대 / OpenGL";
-    constexpr const char* Version = "레벨 1 · 파밍 튜토리얼";
+    constexpr const char* Version = "청크 월드 · 8종 섬 · 32종 특산품";
     constexpr const char* Chart = "주변 해도";
     constexpr const char* North = "북";
     constexpr const char* Sailing = "항해 중";
     constexpr const char* Walking = "도보 이동";
     constexpr const char* Chunk = " / 청크 ";
-    constexpr const char* Movement = "WASD 이동 / 좌클릭 공격 / F 강화 / E 승선·하선";
+    constexpr const char* Movement = "WASD 이동 / 좌클릭 공격 / F 강화 / E 시설 이용·승선·하선";
     constexpr const char* Tools = "Space 달리기 / 휠 줌 / V 후처리 안내 / R 항구 복귀 / Esc 종료";
     constexpr const char* Welcome =
-        "항구 밖의 게를 처치해 경험치와 장비를 모으세요. 붉은 표시는 북쪽 보스입니다.";
+        "산호 몬스터 전리품을 상점에서 팔아 50골드를 모으세요. 조선소에서 첫 돛단배를 구매할 수 있습니다.";
     constexpr const char* Boarded = "출항했습니다. 수평선 너머의 새로운 섬을 찾아보세요.";
     constexpr const char* TooFarToBoard = "배에 더 가까이 다가간 뒤 E를 눌러주세요.";
     constexpr const char* Landed = "상륙했습니다. 배는 이곳에서 기다립니다.";

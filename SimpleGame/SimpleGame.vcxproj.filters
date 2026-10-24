@@ -18,6 +18,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <Text Include="..\doc\map.md" />
+    <Text Include="..\doc\MAP_IMPLEMENTATION_REPORT.md" />
+    <Text Include="..\doc\TOWN_SERVICES_README.md" />
     <Text Include="..\doc\PROTOTYPE_README.txt" />
     <Text Include="..\doc\LEVEL_ONE_README.txt" />
   </ItemGroup>
@@ -53,6 +56,24 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="FrameProfiler.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="MapCatalog.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="IslandLayout.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="MapState.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="WorldPosition.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="PlayerEconomy.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="TownServiceActor.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="World.h">
@@ -115,6 +136,27 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="Renderer.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MapCatalog.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="IslandLayout.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MapState.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="WorldPosition.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="PlayerEconomy.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="TownServiceActor.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="PrototypeServices.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="World.cpp">

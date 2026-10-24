@@ -38,6 +38,11 @@ void CallbackActor::Update(float dt)
     }
 }
 
+void ScaledMeshActor::Render(Renderer& renderer, const ActorTransform& world) const
+{
+    renderer.Submit(mesh, world.position, world.rotation, scale, MeshAnimation::None, 0);
+}
+
 void CallbackActor::Render(Renderer& renderer, const ActorTransform& world) const
 {
     if (draw)

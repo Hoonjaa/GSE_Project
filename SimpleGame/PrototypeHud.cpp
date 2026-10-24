@@ -13,10 +13,7 @@ namespace
 
 void Prototype::RenderHud(Renderer& r)
 {
-    WorldPosition origin;
-    origin.x = 0;
-    origin.z = 0;
-    if (m_hud)
+    if (m_hud && m_service.kind == TownServiceKind::None)
     {
         const float W = static_cast<float>(r.Width()), H = static_cast<float>(r.Height());
         const float font = W < 950 ? 1.5f : 2.f;
@@ -55,49 +52,68 @@ void Prototype::RenderHud(Renderer& r)
             r.Panel(left, top, 172, 200, Ink);
             r.Text(left + 12, top + 8, KoreanText::Chart, Gold, 1.8f);
             r.Panel(left + 6, top + 34, chart, chart, {.09f, .32f, .38f});
-            const auto mapPlayer = ActivePosition().RelativeTo(origin);
-            const bool tutorialMap = std::abs(mapPlayer.x - 16) < 100 && std::abs(mapPlayer.z - 16) < 100;
-            if (tutorialMap)
+            const auto* island = m_world.CurrentIsland(ActivePosition());
+            if (island && island->Info().starter)
             {
-                m_levelOne.Map(r, left + 6, top + 34, chart, mapPlayer);
+                WorldPosition origin;
+                origin.x = origin.z = 0;
+                m_levelOne.Map(r, left + 6, top + 34, chart, ActivePosition().RelativeTo(origin));
             }
             else
             {
-                for (const auto& entry : m_world.Chunks())
-                {
-                    const auto& island = entry.second;
-                    if (!island.hasIsland)
-                    {
-                        continue;
-                    }
-                    WorldPosition p;
-                    p.chunkX = entry.first.first;
-                    p.chunkZ = entry.first.second;
-                    p.x = island.centerX;
-                    p.z = island.centerZ;
-                    auto v = p.RelativeTo(ActivePosition());
-                    float x = left + 86 + v.x * 1.1f, z = top + 114 + v.z * 1.1f;
-                    float size = island.radius * 1.1f;
-                    if (x - size < left + 7 || x + size > left + 165 || z - size < top + 35 ||
-                        z + size > top + 193)
-                    {
-                        continue;
-                    }
-                    r.Panel(x - size, z - size, size * 2, size * 2, {.79f, .75f, .49f});
-                    r.Panel(
-                        x - size * .7f,
-                        z - size * .7f,
-                        size * 1.4f,
-                        size * 1.4f,
-                        island.harbor ? Color{.88f, .54f, .30f} : Color{.39f, .59f, .38f});
-                }
-            }
-            if (!tutorialMap)
-            {
-                r.Panel(left + 83, top + 111, 6, 6, Paper);
+                m_world.DrawMap(r, ActivePosition(), left + 6, top + 34, chart);
             }
             r.Text(left + 145, top + 37, KoreanText::North, Gold, 1.5f);
         }
+        if (const auto* island = m_world.CurrentIsland(ActivePosition()))
+        {
+            const auto relative = ActivePosition().RelativeTo(island->Info().center);
+            const auto& entry = MapCatalog::Island(island->Info().shape);
+            r.Panel(20, 265, 430, 86, Ink);
+            r.Text(32, 270, std::string(entry.name) + " / 항구 마을", Gold, 1.6f);
+            std::string goods = "특산품: ";
+            for (size_t i = 0; i < entry.specialties.size(); ++i)
+            {
+                if (i)
+                {
+                    goods += " · ";
+                }
+                goods += MapCatalog::GoodName(entry.specialties[i]);
+            }
+            r.Text(32, 294, goods, Paper, 1.35f, 402);
+            r.Text(
+                32,
+                327,
+                island->Village(relative.x, relative.z)
+                    ? "마을 안전 구역 / 산호 전리품 매입 5·20골드 / 특산품 무역 준비 중"
+                    : "마을 밖 탐험 구역",
+                Paper,
+                1.3f);
+        }
+        r.Panel(20, 360, 430, 84, Ink);
+        r.Text(32, 365, "보유 골드: " + std::to_string(m_economy.Gold()), Gold, 1.6f);
+        r.Text(
+            32,
+            389,
+            "전리품: 일반 " + std::to_string(m_economy.LootCount(CoralLoot::Normal)) + " / 보스 " +
+                std::to_string(m_economy.LootCount(CoralLoot::Boss)),
+            Paper,
+            1.4f,
+            402);
+        const auto facility = m_world.ServiceAt(Player().location);
+        const std::string shipInfo =
+            m_economy.HasShip()
+                ? ("8m 돛단배 · 동료 정원 1명 · 적재 " + std::to_string(m_economy.UsedCargoKinds()) + "/5종")
+                : "배 미소유 · 조선소에서 50골드로 구매";
+        r.Text(
+            32,
+            414,
+            facility.kind == TownServiceKind::None
+                ? shipInfo
+                : (facility.kind == TownServiceKind::Shop ? "[E] 상점 이용" : "[E] 조선소 이용"),
+            Paper,
+            1.3f,
+            402);
         const auto active = ActivePosition();
         std::ostringstream status;
         status << (m_sailing ? KoreanText::Sailing : KoreanText::Walking) << KoreanText::Chunk
@@ -109,7 +125,8 @@ void Prototype::RenderHud(Renderer& r)
         r.Text(38, H - 62, KoreanText::Tools, Paper, font);
         std::ostringstream debug;
         debug << KoreanText::Seed << m_world.Tutorial().Seed() << KoreanText::LoadedChunks
-              << m_world.Chunks().size() << KoreanText::Triangles << r.TriangleCount() << " / "
+              << m_world.Chunks().size() << " / 활성 " << m_world.VisibleChunks() << " / 대기 "
+              << m_world.PendingChunks() << KoreanText::Triangles << r.TriangleCount() << " / "
               << static_cast<int>(1 / m_frameAverage) << KoreanText::Frames;
         r.Text(38, H - 40, debug.str(), {.49f, .71f, .69f}, 1.5f);
         if (m_messageTime > 0)
@@ -119,4 +136,5 @@ void Prototype::RenderHud(Renderer& r)
             r.Text(34, H - 180, m_message, Paper, 1.8f, messageWidth - 28);
         }
     }
+    RenderServiceMenu(r);
 }

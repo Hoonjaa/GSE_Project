@@ -1,35 +1,32 @@
 #pragma once
 #include "SceneGraph.h"
+#include "WorldPosition.h"
 #include "LevelOneTerrain.h"
-#include <cstdint>
+#include <deque>
 #include <map>
+#include <set>
 #include <utility>
-
-constexpr double ChunkSize = 32.0;
-
-struct WorldPosition
-{
-    std::int64_t chunkX = 0, chunkZ = 0;
-    double x = 16, z = 16;
-    void Move(double dx, double dz);
-    Vec3 RelativeTo(const WorldPosition& origin) const;
-};
 
 struct IslandChunk
 {
-    bool hasIsland = false, harbor = false, ruin = false;
-    float centerX = 16, centerZ = 16, radius = 8, phase = 0;
     ActorId actor = NoActor, waves = NoActor;
+    std::shared_ptr<const IslandLayout> island;
     CachedMesh terrain;
-    CachedMesh scenery;
-    float ShoreRadius(float angle) const;
+    bool visible = false;
+};
+
+struct TownInteraction
+{
+    TownServiceKind kind = TownServiceKind::None;
+    IslandKey island;
+    WorldPosition position;
 };
 
 class World
 {
 public:
     using Key = std::pair<std::int64_t, std::int64_t>;
-    static constexpr std::uint64_t Seed = 20260908;
+    static constexpr std::uint64_t Seed = IslandGeneration::WorldSeed;
     explicit World(SceneGraph& scene);
     ~World();
     World(const World&) = delete;
@@ -37,7 +34,9 @@ public:
     void Update(const WorldPosition& player, int radius);
     void Prepare(const WorldPosition& camera, float time, bool grid);
     bool CanWalk(const WorldPosition& position) const;
-    bool CanSail(const WorldPosition& position) const;
+    bool CanSail(const WorldPosition& position, float heading, float length) const;
+    bool IsActive(const WorldPosition& position) const;
+    bool TutorialActive() const;
 
     const LevelOneTerrain& Tutorial() const
     {
@@ -51,13 +50,43 @@ public:
         return m_chunks;
     }
 
+    const IslandLayout* CurrentIsland(const WorldPosition& position) const;
+    WorldPosition StartSpawn() const;
+    WorldPosition StartShip(float length = 8) const;
+    WorldPosition ShipyardMooring(IslandKey key, float length) const;
+    float OutboundHeading(IslandKey key) const;
+    TownInteraction ServiceAt(const WorldPosition& player) const;
+    WorldPosition StartVillage() const;
+    void DrawMap(Renderer& renderer, const WorldPosition& center, float left, float top, float extent) const;
+
+    size_t PendingChunks() const
+    {
+        return m_pending.size();
+    }
+
+    size_t VisibleChunks() const;
+    bool WasVisited(IslandKey key) const;
+
 private:
-    static IslandChunk Generate(std::int64_t x, std::int64_t z);
+    struct ResidentIsland
+    {
+        std::shared_ptr<IslandLayout> layout;
+        bool visited = false, dirty = false;
+    };
+
+    void Generate(Key key);
+    void PlaceProps(IslandChunk& chunk, const WorldPosition& origin);
     bool LandAt(const WorldPosition& position, float margin) const;
+    void Visit(const WorldPosition& position);
+    void RebuildQueue(const WorldPosition& position);
     SceneGraph& m_scene;
-    ActorId m_root = NoActor, m_ocean = NoActor, m_chunksRoot = NoActor, m_tutorialActor = NoActor;
+    ActorId m_root = NoActor, m_ocean = NoActor, m_chunksRoot = NoActor;
+    std::shared_ptr<IslandLayout> m_start;
+    LevelOneTerrain m_tutorial;
+    CachedMesh m_house, m_palm, m_pier;
     std::map<Key, IslandChunk> m_chunks;
+    std::map<IslandKey, ResidentIsland> m_islands;
+    std::deque<Key> m_pending;
     Key m_center = {0, 0};
     int m_radius = -1;
-    LevelOneTerrain m_tutorial;
 };

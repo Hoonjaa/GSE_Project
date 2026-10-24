@@ -76,6 +76,15 @@ LevelMeshes::LevelMeshes()
         }
         drops[weapon] = CachedMesh(std::move(mesh), weapon ? "drop_weapon" : "drop_stone");
     }
+    for (int boss = 0; boss < 2; ++boss)
+    {
+        Mesh trophy;
+        const Color coral = boss ? Color{.96f, .37f, .55f} : Color{.97f, .59f, .36f};
+        Cone(trophy, {0, 0, 0}, boss ? .28f : .20f, .55f, coral, 5);
+        Box(trophy, {-.05f, .12f, -.05f}, {.10f, .42f, .10f}, coral);
+        Box(trophy, {-.23f, .23f, -.045f}, {.46f, .08f, .09f}, coral);
+        trophies[boss] = CachedMesh(std::move(trophy), boss ? "boss_coral_loot" : "coral_loot");
+    }
     Mesh mesh;
     const float heading = 0;
     for (int i = 0; i < 20; ++i)

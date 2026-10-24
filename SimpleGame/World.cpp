@@ -1,440 +1,561 @@
 #include "stdafx.h"
 #include "World.h"
 #include "WorldActors.h"
+#include "MeshCache.h"
+#include "MapState.h"
+#include "TownServiceActor.h"
+#include "Diagnostics.h"
+#include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <limits>
-#include <algorithm>
 
 namespace
 {
     constexpr float Pi = 3.14159265359f;
-    constexpr float Ground = .55f;
-    using namespace Geometry;
 
-    std::uint64_t Mix(std::uint64_t v)
+    WorldPosition Origin(World::Key key)
     {
-        v += 0x9e3779b97f4a7c15ULL;
-        v = (v ^ (v >> 30)) * 0xbf58476d1ce4e5b9ULL;
-        v = (v ^ (v >> 27)) * 0x94d049bb133111ebULL;
-        return v ^ (v >> 31);
+        WorldPosition p;
+        p.chunkX = key.first;
+        p.chunkZ = key.second;
+        p.x = p.z = 0;
+        return p;
     }
 
-    float Random(std::uint64_t& state)
+    bool InChunk(Vec3 p)
     {
-        state = Mix(state);
-        return static_cast<float>(state >> 40) / 16777216.f;
+        return p.x >= 0 && p.z >= 0 && p.x < ChunkSize && p.z < ChunkSize;
     }
 
-    bool Dock(const WorldPosition& p, float margin)
+    std::uint64_t Distance(std::int64_t a, std::int64_t b)
     {
-        WorldPosition origin;
-        origin.x = 0;
-        origin.z = 0;
-        const auto v = p.RelativeTo(origin);
-        return v.x >= 58 + margin && v.x <= 69 - margin && v.z >= 17 + margin && v.z <= 18.5f - margin;
+        return a >= b ? std::uint64_t(a) - std::uint64_t(b) : std::uint64_t(b) - std::uint64_t(a);
     }
 
-    struct House
+    std::uint64_t ChunkDistance(World::Key a, World::Key b)
     {
-        float x, z, w, d, h;
-        Color roof;
-    };
-
-    const House Houses[] = {
-        {11, 11, 3, 2.8f, 2.4f, {.78f, .29f, .19f}},
-        {16, 10.5f, 2.7f, 2.6f, 2, {.88f, .41f, .24f}},
-        {10, 16, 2.5f, 3, 1.9f, {.19f, .43f, .52f}},
-        {14.5f, 20, 2.5f, 2.4f, 1.8f, {.83f, .36f, .23f}}};
-
-    void HouseMesh(Mesh& m, const House& h)
-    {
-        float x = h.x, z = h.z, w = h.w, d = h.d, y = Ground + h.h;
-        Box(m, {x, Ground, z}, {w, h.h, d}, {.94f, .85f, .63f});
-        // Gabled roof with an overhang and separate illuminated faces.
-        float X = x + w + .2f, Z = z + d + .2f;
-        x -= .2f;
-        z -= .2f;
-        Quad(m, {x, y, z}, {X, y, z}, {X, y + 1, z + d * .5f + .2f}, {x, y + 1, z + d * .5f + .2f}, h.roof);
-        Quad(
-            m,
-            {x, y + 1, z + d * .5f + .2f},
-            {X, y + 1, z + d * .5f + .2f},
-            {X, y, Z},
-            {x, y, Z},
-            {h.roof.r * .8f, h.roof.g * .8f, h.roof.b * .8f});
-        Triangle(m, {X, y, z}, {X, y, Z}, {X, y + 1, z + d * .5f + .2f}, {.9f, .76f, .51f});
-        Triangle(m, {x, y, z}, {x, y, Z}, {x, y + 1, z + d * .5f + .2f}, {.75f, .65f, .47f});
-        Box(m, {h.x + .35f, Ground + .7f, h.z + h.d + .015f}, {.55f, .65f, .04f}, {.10f, .31f, .36f});
-        Box(m, {h.x + h.w - .85f, Ground, h.z + h.d + .025f}, {.6f, 1.25f, .05f}, {.35f, .21f, .13f});
-        Box(m, {h.x + .4f, y + .1f, h.z + .5f}, {.35f, 1.1f, .4f}, {.82f, .71f, .56f});
-    }
-
-    void Palm(Mesh& m, float x, float z, float height, float phase)
-    {
-        Box(m, {x - .13f, Ground, z - .13f}, {.26f, height, .26f}, {.54f, .37f, .20f});
-        for (int n = 0; n < 6; ++n)
-        {
-            float a = phase + n * Pi / 3, dx = std::cos(a), dz = std::sin(a);
-            Vec3 tip = {x + dx * 1.8f, Ground + height - .4f, z + dz * 1.8f};
-            Vec3 top = {x, Ground + height + .3f, z};
-            Vec3 l = {x + dx * .8f - dz * .35f, Ground + height + .18f, z + dz * .8f + dx * .35f};
-            Vec3 r = {x + dx * .8f + dz * .35f, Ground + height + .18f, z + dz * .8f - dx * .35f};
-            Triangle(m, top, l, tip, {.18f, .52f, .28f});
-            Triangle(m, top, tip, r, {.29f, .64f, .31f});
-        }
+        return (std::max)(Distance(a.first, b.first), Distance(a.second, b.second));
     }
 }
 
-// Definition for pre-C++17 toolchains when Seed is passed by reference.
 constexpr std::uint64_t World::Seed;
 
-void WorldPosition::Move(double dx, double dz)
-{
-    // Only small local steps are accepted; normalization supports negative chunks.
-    auto axis = [](std::int64_t& chunk, double& local, double delta)
-    {
-        const double next = local + delta;
-        if (!std::isfinite(next) || std::abs(delta) > ChunkSize * 1000)
-        {
-            return;
-        }
-        const auto shift = static_cast<std::int64_t>(std::floor(next / ChunkSize));
-        const auto limit = (std::numeric_limits<std::int64_t>::max)() - 1024;
-        if ((shift > 0 && chunk > limit - shift) || (shift < 0 && chunk < -limit - shift))
-        {
-            return;
-        }
-        chunk += shift;
-        local = next - static_cast<double>(shift) * ChunkSize;
-    };
-    axis(chunkX, x, dx);
-    axis(chunkZ, z, dz);
-}
-
-Vec3 WorldPosition::RelativeTo(const WorldPosition& origin) const
-{
-    // Subtract integers first for nearby chunks; never convert global positions to float.
-    auto relative = [](std::int64_t a, std::int64_t b, double local)
-    {
-        // Unsigned subtraction also handles endpoints without signed overflow.
-        const std::uint64_t distance =
-            a >= b ? std::uint64_t(a) - std::uint64_t(b) : std::uint64_t(b) - std::uint64_t(a);
-        if (distance > 1000)
-        {
-            return a >= b ? 100000.f : -100000.f;
-        }
-        return static_cast<float>((a >= b ? 1.0 : -1.0) * double(distance) * ChunkSize + local);
-    };
-    return {relative(chunkX, origin.chunkX, x - origin.x), 0, relative(chunkZ, origin.chunkZ, z - origin.z)};
-}
-
-float IslandChunk::ShoreRadius(float a) const
-{
-    return radius * (1 + .065f * std::sin(3 * a + phase) + .035f * std::cos(5 * a - phase));
-}
-
-IslandChunk World::Generate(std::int64_t cx, std::int64_t cz)
-{
-    std::uint64_t state =
-        Mix(Seed ^ Mix(static_cast<std::uint64_t>(cx)) ^
-            (Mix(static_cast<std::uint64_t>(cz) + 1337) * 0x9e3779b97f4a7c15ULL));
-    IslandChunk c;
-    Mesh terrain, scenery;
-    c.harbor = (cx == 0 && cz == 0);
-    c.hasIsland = c.harbor || Random(state) > .30f;
-    if (!c.hasIsland)
-    {
-        return c;
-    }
-    // The tutorial spans several chunks; do not overlap it with small generated islands.
-    if (!c.harbor && cx >= -2 && cx <= 2 && cz >= -2 && cz <= 2)
-    {
-        c.hasIsland = false;
-        return c;
-    }
-    c.centerX = 13 + Random(state) * 6;
-    c.centerZ = 13 + Random(state) * 6;
-    c.radius = 5 + Random(state) * 3.5f;
-    c.phase = Random(state) * 2 * Pi;
-    c.ruin = Random(state) > .7f;
-    if (c.harbor)
-    {
-        c.centerX = 16;
-        c.centerZ = 16;
-        c.radius = 9;
-        c.phase = 0;
-        c.ruin = false;
-    }
-    // Polygon rings share angular samples; the land collision is kept inside the edge.
-    const float scales[] = {1.30f, 1.12f, 1.f, .81f};
-    const float heights[] = {.012f, .025f, Ground, Ground + .01f};
-    const Color colors[] = {{.13f, .61f, .64f}, {.33f, .76f, .71f}, {.90f, .80f, .56f}, {.46f, .66f, .31f}};
-    for (int ring = 0; ring < 4; ++ring)
-    {
-        for (int i = 0; i < 64; ++i)
-        {
-            const float a = 2 * Pi * i / 64, b = 2 * Pi * (i + 1) / 64;
-            const float ra = c.ShoreRadius(a) * scales[ring], rb = c.ShoreRadius(b) * scales[ring];
-            Triangle(
-                terrain,
-                {c.centerX, heights[ring], c.centerZ},
-                {c.centerX + std::cos(a) * ra, heights[ring], c.centerZ + std::sin(a) * ra},
-                {c.centerX + std::cos(b) * rb, heights[ring], c.centerZ + std::sin(b) * rb},
-                colors[ring]);
-        }
-    }
-    // Sloped sand joins the raised land to the shallow water.
-    for (int i = 0; i < 64; ++i)
-    {
-        const float a = 2 * Pi * i / 64, b = 2 * Pi * (i + 1) / 64;
-        const float ra = c.ShoreRadius(a), rb = c.ShoreRadius(b);
-        Quad(
-            terrain,
-            {c.centerX + std::cos(a) * ra, Ground, c.centerZ + std::sin(a) * ra},
-            {c.centerX + std::cos(b) * rb, Ground, c.centerZ + std::sin(b) * rb},
-            {c.centerX + std::cos(b) * rb * 1.055f, .03f, c.centerZ + std::sin(b) * rb * 1.055f},
-            {c.centerX + std::cos(a) * ra * 1.055f, .03f, c.centerZ + std::sin(a) * ra * 1.055f},
-            {.77f, .69f, .47f});
-    }
-    if (c.harbor)
-    {
-        Quad(
-            scenery,
-            {12, Ground + .022f, 17},
-            {23, Ground + .022f, 17},
-            {23, Ground + .022f, 18.5f},
-            {12, Ground + .022f, 18.5f},
-            {.84f, .74f, .51f});
-        for (const auto& h : Houses)
-        {
-            HouseMesh(scenery, h);
-        }
-        for (int i = 0; i < 28; ++i)
-        {
-            Box(scenery, {21 + i * .32f, .37f, 17}, {.29f, .18f, 1.5f}, {.59f, .39f, .22f});
-        }
-        for (int i = 0; i < 5; ++i)
-        {
-            for (float z : {17.05f, 18.25f})
-            {
-                Box(scenery, {22 + i * 1.7f, -.15f, z}, {.18f, 1.02f, .18f}, {.38f, .25f, .16f});
-            }
-        }
-        for (int i = 0; i < 3; ++i)
-        {
-            Box(scenery, {21.f + i * .65f, Ground, 16.2f}, {.55f, .55f, .55f}, {.64f, .44f, .24f});
-        }
-        // Lighthouse.
-        Box(scenery, {19.8f, Ground, 12.5f}, {1.4f, 3.8f, 1.4f}, {.93f, .88f, .70f});
-        Box(scenery, {19.72f, 3.1f, 12.42f}, {1.56f, .45f, 1.56f}, {.82f, .32f, .22f});
-        Box(scenery, {19.95f, 4.35f, 12.65f}, {1.1f, .75f, 1.1f}, {.99f, .77f, .32f});
-        Cone(scenery, {20.5f, 5.1f, 13.2f}, 1.15f, .8f, {.19f, .34f, .40f}, 4);
-        Palm(scenery, 11, 21, 3.1f, 0);
-        Palm(scenery, 14, 9, 3.4f, 1);
-        Palm(scenery, 22, 16, 2.9f, 2);
-        Palm(scenery, 18, 23, 3.1f, 3);
-    }
-    else
-    {
-        for (int i = 0; i < 7; ++i)
-        {
-            const float a = Random(state) * 2 * Pi, r = (.25f + Random(state) * .4f) * c.radius;
-            Palm(
-                scenery,
-                c.centerX + std::cos(a) * r,
-                c.centerZ + std::sin(a) * r,
-                2.2f + Random(state) * 1.4f,
-                a);
-        }
-        if (c.ruin)
-        {
-            for (int i = -1; i <= 1; i += 2)
-            {
-                Box(scenery,
-                    {c.centerX + i * 1.25f - .25f, Ground, c.centerZ},
-                    {.5f, 2.8f, .65f},
-                    {.64f, .68f, .58f});
-            }
-            Box(scenery, {c.centerX - 1.5f, Ground + 2.8f, c.centerZ}, {3, .45f, .65f}, {.78f, .79f, .65f});
-            Cone(scenery, {c.centerX, Ground, c.centerZ + 1.8f}, .55f, 1, {.34f, .79f, .77f}, 4);
-        }
-        else
-        {
-            Cone(scenery, {c.centerX, Ground, c.centerZ}, c.radius * .38f, 2, {.49f, .60f, .36f}, 7);
-        }
-    }
-    c.terrain =
-        CachedMesh(std::move(terrain), "chunk_" + std::to_string(cx) + "_" + std::to_string(cz) + "_terrain");
-    c.scenery =
-        CachedMesh(std::move(scenery), "chunk_" + std::to_string(cx) + "_" + std::to_string(cz) + "_scenery");
-    return c;
-}
-
-World::World(SceneGraph& scene) : m_scene(scene)
+World::World(SceneGraph& scene)
+    : m_scene(scene), m_start(std::make_shared<IslandLayout>(IslandGeneration::Describe({0, 0}))),
+      m_tutorial(m_start)
 {
     m_root = m_scene.Create<Actor>(NoActor, "월드").Id();
     m_ocean = m_scene.Create<OceanActor>(m_root).Id();
     m_chunksRoot = m_scene.Create<Actor>(m_root, "스트리밍 청크").Id();
-    m_tutorialActor = m_scene.Create<MeshActor>(m_root, m_tutorial.MeshResource(), "레벨 1 지형").Id();
+    m_islands[{0, 0}] = {m_start, MapState::Visited({0, 0}), false};
+    m_house = MeshCache::LoadOrCreate(
+        "map_house_v1",
+        []
+        {
+            Mesh m;
+            Geometry::Box(m, {-1.4f, 0, -1.2f}, {2.8f, 2.2f, 2.4f}, {.94f, .85f, .63f});
+            Geometry::Quad(
+                m,
+                {-1.5f, 2.2f, -1.3f},
+                {1.5f, 2.2f, -1.3f},
+                {1.5f, 3.1f, 0},
+                {-1.5f, 3.1f, 0},
+                {.83f, .36f, .23f});
+            Geometry::Quad(
+                m,
+                {-1.5f, 3.1f, 0},
+                {1.5f, 3.1f, 0},
+                {1.5f, 2.2f, 1.3f},
+                {-1.5f, 2.2f, 1.3f},
+                {.69f, .29f, .19f});
+            Geometry::Triangle(
+                m,
+                {1.5f, 2.2f, -1.3f},
+                {1.5f, 2.2f, 1.3f},
+                {1.5f, 3.1f, 0},
+                {.9f, .76f, .51f});
+            Geometry::Triangle(
+                m,
+                {-1.5f, 2.2f, -1.3f},
+                {-1.5f, 2.2f, 1.3f},
+                {-1.5f, 3.1f, 0},
+                {.75f, .65f, .47f});
+            Geometry::Box(m, {-.9f, .75f, 1.2f}, {.55f, .65f, .03f}, {.10f, .31f, .36f});
+            Geometry::Box(m, {.55f, 0, 1.2f}, {.6f, 1.3f, .03f}, {.35f, .21f, .13f});
+            return m;
+        });
+    m_palm = MeshCache::LoadOrCreate(
+        "map_palm_v1",
+        []
+        {
+            Mesh m;
+            Geometry::Box(m, {-.13f, 0, -.13f}, {.26f, 3, .26f}, {.54f, .37f, .20f});
+            for (int n = 0; n < 6; ++n)
+            {
+                const float a = n * Pi / 3, dx = std::cos(a), dz = std::sin(a);
+                Geometry::Triangle(
+                    m,
+                    {0, 3.3f, 0},
+                    {dx * .8f - dz * .35f, 3.1f, dz * .8f + dx * .35f},
+                    {dx * 1.8f, 2.6f, dz * 1.8f},
+                    {.18f, .52f, .28f});
+                Geometry::Triangle(
+                    m,
+                    {0, 3.3f, 0},
+                    {dx * 1.8f, 2.6f, dz * 1.8f},
+                    {dx * .8f + dz * .35f, 3.1f, dz * .8f - dx * .35f},
+                    {.29f, .64f, .31f});
+            }
+            return m;
+        });
+    m_pier = MeshCache::LoadOrCreate(
+        "map_pier_v1",
+        []
+        {
+            Mesh m;
+            Geometry::Box(m, {0, .37f, -.75f}, {1, .18f, 1.5f}, {.59f, .39f, .22f});
+            return m;
+        });
+    Diagnostics::Get().Event("map_generator=v1 island_width=max_shoreline_span gap=shore_to_shore_min_300 "
+                             "sector_chunks=16 engine_chunk_m=32 queue_chunks_per_update=1");
 }
 
 World::~World()
 {
+    for (const auto& entry : m_islands)
+    {
+        if (entry.second.dirty)
+        {
+            MapState::SaveVisited(entry.first);
+        }
+    }
     m_scene.Destroy(m_root);
     m_scene.CollectDestroyed();
 }
 
-void World::Update(const WorldPosition& p, int radius)
+void World::RebuildQueue(const WorldPosition& player)
 {
-    const Key center = {p.chunkX, p.chunkZ};
-    if (m_radius == radius && m_center == center)
+    m_pending.clear();
+    std::vector<Key> pending;
+    for (int z = -m_radius - 1; z <= m_radius + 1; ++z)
     {
-        return;
-    }
-    m_radius = radius;
-    m_center = center;
-    for (auto i = m_chunks.begin(); i != m_chunks.end();)
-    {
-        if (i->first.first < p.chunkX - radius || i->first.first > p.chunkX + radius ||
-            i->first.second < p.chunkZ - radius || i->first.second > p.chunkZ + radius)
+        for (int x = -m_radius - 1; x <= m_radius + 1; ++x)
         {
-            m_scene.Destroy(i->second.actor);
-            i = m_chunks.erase(i);
+            const Key key = {player.chunkX + x, player.chunkZ + z};
+            if (m_chunks.find(key) == m_chunks.end())
+            {
+                pending.push_back(key);
+            }
+        }
+    }
+    std::stable_sort(
+        pending.begin(),
+        pending.end(),
+        [&](Key a, Key b)
+        {
+            const auto da = ChunkDistance(a, m_center), db = ChunkDistance(b, m_center);
+            if (da != db)
+            {
+                return da < db;
+            }
+            return Distance(a.first, m_center.first) + Distance(a.second, m_center.second) <
+                   Distance(b.first, m_center.first) + Distance(b.second, m_center.second);
+        });
+    m_pending.assign(pending.begin(), pending.end());
+    Diagnostics::Get().Event(
+        "world_window x=" + std::to_string(m_center.first) + " z=" + std::to_string(m_center.second) +
+        " render_radius=" + std::to_string(m_radius) + " preload_radius=" + std::to_string(m_radius + 1) +
+        " unload_radius=" + std::to_string(m_radius + 2));
+}
+
+void World::Update(const WorldPosition& player, int radius)
+{
+    // Retain the viewport-derived engine radius. Borders are streaming policy,
+    // not a newly fixed gameplay render distance.
+    radius = (std::max)(1, (std::min)(64, radius));
+    const Key center = {player.chunkX, player.chunkZ};
+    if (m_radius != radius || m_center != center)
+    {
+        m_radius = radius;
+        m_center = center;
+        for (auto it = m_chunks.begin(); it != m_chunks.end();)
+        {
+            if (ChunkDistance(it->first, m_center) > static_cast<unsigned>(m_radius + 2))
+            {
+                m_scene.Destroy(it->second.actor);
+                it = m_chunks.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+        RebuildQueue(player);
+    }
+    const bool generating = !m_pending.empty();
+    if (generating)
+    {
+        const auto start = std::chrono::steady_clock::now();
+        const auto key = m_pending.front();
+        m_pending.pop_front();
+        Generate(key);
+        Diagnostics::Get().Event(
+            "chunk_generated x=" + std::to_string(key.first) + " z=" + std::to_string(key.second) +
+            " pending=" + std::to_string(m_pending.size()) + " cpu_ms=" +
+            std::to_string(
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count()));
+    }
+    for (auto& entry : m_chunks)
+    {
+        const bool active = ChunkDistance(entry.first, m_center) <= static_cast<unsigned>(m_radius);
+        entry.second.visible = active;
+        auto* actor = m_scene.Find(entry.second.actor);
+        actor->visible = active;
+        actor->enabled = active;
+    }
+    for (auto it = m_islands.begin(); it != m_islands.end();)
+    {
+        if (!(it->first == IslandKey{0, 0}) && it->second.layout.use_count() == 1)
+        {
+            if (it->second.dirty && !MapState::SaveVisited(it->first))
+            {
+                ++it;
+                continue;
+            }
+            it = m_islands.erase(it);
         }
         else
         {
-            ++i;
+            ++it;
         }
     }
-    for (int z = -radius; z <= radius; ++z)
+    Visit(player);
+    if (generating)
     {
-        for (int x = -radius; x <= radius; ++x)
+        Diagnostics::Get().Event(
+            "world_stream loaded=" + std::to_string(m_chunks.size()) +
+            " active=" + std::to_string(VisibleChunks()) + " pending=" + std::to_string(m_pending.size()) +
+            " islands=" + std::to_string(m_islands.size()));
+    }
+}
+
+void World::Generate(Key key)
+{
+    const auto origin = Origin(key);
+    IslandChunk chunk;
+    const auto sector = IslandGeneration::Sector(key.first, key.second);
+    for (int dz = -1; dz <= 1 && !chunk.island; ++dz)
+    {
+        for (int dx = -1; dx <= 1 && !chunk.island; ++dx)
         {
-            Key key = {p.chunkX + x, p.chunkZ + z};
-            if (m_chunks.find(key) == m_chunks.end())
+            const IslandKey islandKey = {sector.x + dx, sector.z + dz};
+            const auto descriptor = IslandGeneration::Describe(islandKey);
+            const auto relative = descriptor.center.RelativeTo(origin);
+            // Conservative bound contains land, houses and docks of every current shape.
+            if (relative.x < -MapCatalog::MaximumIslandSize || relative.z < -MapCatalog::MaximumIslandSize ||
+                relative.x > ChunkSize + MapCatalog::MaximumIslandSize ||
+                relative.z > ChunkSize + MapCatalog::MaximumIslandSize)
             {
-                auto inserted = m_chunks.emplace(key, Generate(key.first, key.second));
-                auto& chunk = inserted.first->second;
-                chunk.actor = m_scene.Create<Actor>(m_chunksRoot, "섬 청크").Id();
-                chunk.waves = m_scene.Create<WaveActor>(chunk.actor).Id();
-                if (!chunk.harbor)
-                {
-                    m_scene.Create<MeshActor>(chunk.actor, chunk.terrain, "섬 지형");
-                }
-                m_scene.Create<MeshActor>(chunk.actor, chunk.scenery, "건물 및 장식");
+                continue;
             }
+            auto found = m_islands.find(islandKey);
+            if (found == m_islands.end())
+            {
+                auto layout = std::make_shared<IslandLayout>(descriptor);
+                Diagnostics::Get().Event(
+                    "island_generated x=" + std::to_string(islandKey.x) +
+                    " z=" + std::to_string(islandKey.z) +
+                    " shape=" + std::to_string(static_cast<int>(descriptor.shape)) +
+                    " width=" + std::to_string(descriptor.width) +
+                    " village_ratio=" + std::to_string(layout->VillageArea() / layout->LandArea()));
+                found =
+                    m_islands.emplace(islandKey, ResidentIsland{layout, MapState::Visited(islandKey), false})
+                        .first;
+            }
+            chunk.island = found->second.layout;
         }
+    }
+    chunk.actor = m_scene.Create<Actor>(m_chunksRoot, "월드 청크").Id();
+    chunk.waves = m_scene.Create<WaveActor>(chunk.actor).Id();
+    if (chunk.island)
+    {
+        Mesh terrain;
+        const auto offset = chunk.island->Info().center.RelativeTo(origin);
+        chunk.island->AppendTerrain(terrain, offset, static_cast<float>(ChunkSize));
+        if (!terrain.empty())
+        {
+            chunk.terrain = CachedMesh(
+                std::move(terrain),
+                "map_chunk_" + std::to_string(key.first) + "_" + std::to_string(key.second));
+            m_scene.Create<MeshActor>(chunk.actor, chunk.terrain, "청크 지형");
+        }
+        PlaceProps(chunk, origin);
+    }
+    m_chunks.emplace(key, std::move(chunk));
+}
+
+void World::PlaceProps(IslandChunk& chunk, const WorldPosition& origin)
+{
+    const auto& layout = *chunk.island;
+    const auto offset = layout.Info().center.RelativeTo(origin);
+    auto relative = [&](Vec3 p)
+    {
+        return Vec3{p.x + offset.x, p.y, p.z + offset.z};
+    };
+    for (auto p : layout.Houses())
+    {
+        const auto q = relative(p);
+        if (InChunk(q))
+        {
+            auto& actor = m_scene.Create<MeshActor>(chunk.actor, m_house, "항구 건물");
+            actor.transform.position = q;
+        }
+    }
+    for (auto kind : {TownServiceKind::Shop, TownServiceKind::Shipyard})
+    {
+        const auto p = relative(kind == TownServiceKind::Shop ? layout.ShopPoint() : layout.ShipyardPoint());
+        if (InChunk(p))
+        {
+            auto& actor = m_scene.Create<TownServiceActor>(chunk.actor, kind);
+            actor.transform.position = {p.x, 0, p.z};
+        }
+    }
+    const auto pier = relative(layout.PierStart());
+    if (InChunk(pier))
+    {
+        auto& actor =
+            m_scene.Create<ScaledMeshActor>(chunk.actor, m_pier, Vec3{layout.PierLength(), 1, 1}, "부두");
+        actor.transform.position = {pier.x, 0, pier.z};
+        const auto direction = layout.PierDirection();
+        actor.transform.rotation = std::atan2(direction.z, direction.x);
+    }
+    for (int i = 0; i < IslandLayout::Size * IslandLayout::Size; ++i)
+    {
+        const auto p = layout.Center(i), q = relative(p);
+        if (!InChunk(q) || !layout.Land(p.x, p.z) || layout.Village(p.x, p.z))
+        {
+            continue;
+        }
+        if (IslandGeneration::Mix(layout.Info().seed ^ i) % 500 != 0)
+        {
+            continue;
+        }
+        auto& actor = m_scene.Create<MeshActor>(chunk.actor, m_palm, "야자수");
+        actor.transform.position = q;
     }
 }
 
 const IslandChunk* World::At(const WorldPosition& p) const
 {
-    auto found = m_chunks.find({p.chunkX, p.chunkZ});
+    const auto found = m_chunks.find({p.chunkX, p.chunkZ});
     return found == m_chunks.end() ? nullptr : &found->second;
+}
+
+bool World::IsActive(const WorldPosition& p) const
+{
+    const auto* chunk = At(p);
+    return chunk && chunk->visible;
+}
+
+bool World::TutorialActive() const
+{
+    // This also covers the starter shore and dock outside its center chunk.
+    const auto p = m_start->Info().center.RelativeTo(Origin(m_center));
+    const float extent = static_cast<float>((m_radius + 1) * ChunkSize);
+    return std::abs(p.x) <= extent + MapCatalog::MaximumIslandSize &&
+           std::abs(p.z) <= extent + MapCatalog::MaximumIslandSize;
 }
 
 bool World::LandAt(const WorldPosition& p, float margin) const
 {
-    if (p.chunkX >= -2 && p.chunkX <= 2 && p.chunkZ >= -2 && p.chunkZ <= 2)
+    const auto* chunk = At(p);
+    if (!chunk || !chunk->island)
     {
-        WorldPosition origin;
-        origin.x = 0;
-        origin.z = 0;
-        const auto v = p.RelativeTo(origin);
-        if (m_tutorial.Land(v.x, v.z))
+        return false;
+    }
+    const auto q = p.RelativeTo(chunk->island->Info().center);
+    if (chunk->island->Land(q.x, q.z))
+    {
+        return true;
+    }
+    for (int i = 0; i < 12 && margin > 0; ++i)
+    {
+        const float a = 2 * Pi * i / 12;
+        if (chunk->island->Land(q.x + margin * std::cos(a), q.z + margin * std::sin(a)))
         {
             return true;
         }
-        if (margin > 0)
-        {
-            for (int i = 0; i < 8; ++i)
-            {
-                const float a = 2 * Pi * i / 8;
-                if (m_tutorial.Land(v.x + margin * std::cos(a), v.z + margin * std::sin(a)))
-                {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
-    const auto c = At(p);
-    if (!c || !c->hasIsland)
-    {
-        return false;
-    }
-    const float dx = static_cast<float>(p.x) - c->centerX, dz = static_cast<float>(p.z) - c->centerZ;
-    return std::sqrt(dx * dx + dz * dz) < c->ShoreRadius(std::atan2(dz, dx)) + margin;
+    return false;
 }
 
 bool World::CanWalk(const WorldPosition& p) const
 {
-    if (p.chunkX >= -2 && p.chunkX <= 2 && p.chunkZ >= -2 && p.chunkZ <= 2)
-    {
-        WorldPosition origin;
-        origin.x = 0;
-        origin.z = 0;
-        const auto v = p.RelativeTo(origin);
-        return m_tutorial.Walk(v.x, v.z);
-    }
-    if (!At(p))
+    const auto* chunk = At(p);
+    if (!chunk || !chunk->island || !chunk->visible)
     {
         return false;
     }
-    if (Dock(p, .18f))
-    {
-        return true;
-    }
-    if (!LandAt(p, -.3f))
+    const auto q = p.RelativeTo(chunk->island->Info().center);
+    return chunk->island->Walk(q.x, q.z);
+}
+
+bool World::CanSail(const WorldPosition& p, float heading, float length) const
+{
+    if (!IsActive(p) || LandAt(p, .2f))
     {
         return false;
     }
-    const auto c = At(p);
-    if (c->harbor)
+    const auto* chunk = At(p);
+    if (chunk->island)
     {
-        for (auto h : Houses)
+        const auto q = p.RelativeTo(chunk->island->Info().center);
+        if (chunk->island->Dock(q.x, q.z, -.1f))
         {
-            if (p.x > h.x - .25 && p.x < h.x + h.w + .25 && p.z > h.z - .25 && p.z < h.z + h.d + .25)
+            return false;
+        }
+    }
+    const double c = std::cos(heading), s = std::sin(heading);
+    for (int i = 0; i < 24; ++i)
+    {
+        auto edge = p;
+        const double x = length * (1.7 / 3.85) * .5 * std::cos(2 * Pi * i / 24);
+        const double z = length * .5 * std::sin(2 * Pi * i / 24);
+        edge.Move(x * c - z * s, x * s + z * c);
+        if (!IsActive(edge) || LandAt(edge, .15f))
+        {
+            return false;
+        }
+        const auto* cell = At(edge);
+        if (cell->island)
+        {
+            const auto q = edge.RelativeTo(cell->island->Info().center);
+            if (cell->island->Dock(q.x, q.z))
             {
                 return false;
             }
-        }
-        if (p.x > 19.55 && p.x < 21.45 && p.z > 12.25 && p.z < 14.15)
-        {
-            return false;
-        }
-    }
-    else
-    {
-        const float dx = static_cast<float>(p.x) - c->centerX, dz = static_cast<float>(p.z) - c->centerZ;
-        if (!c->ruin && dx * dx + dz * dz < c->radius * c->radius * .16f)
-        {
-            return false;
-        }
-        if (c->ruin && std::abs(dz) < .95f && std::abs(std::abs(dx) - 1.25f) < .55f)
-        {
-            return false;
         }
     }
     return true;
 }
 
-bool World::CanSail(const WorldPosition& p) const
+const IslandLayout* World::CurrentIsland(const WorldPosition& p) const
 {
-    if (!At(p) || LandAt(p, .2f) || Dock(p, -.1f))
+    const auto* chunk = At(p);
+    if (!chunk || !chunk->island)
     {
-        return false;
+        return nullptr;
     }
-    for (int i = 0; i < 12; ++i)
+    const auto q = p.RelativeTo(chunk->island->Info().center);
+    return chunk->island->Land(q.x, q.z) || chunk->island->Dock(q.x, q.z) ? chunk->island.get() : nullptr;
+}
+
+void World::Visit(const WorldPosition& p)
+{
+    const auto* layout = CurrentIsland(p);
+    if (!layout)
     {
-        WorldPosition edge = p;
-        edge.Move(1.2 * std::cos(2 * Pi * i / 12), 1.2 * std::sin(2 * Pi * i / 12));
-        if (!At(edge) || LandAt(edge, .15f) || Dock(edge, 0))
+        return;
+    }
+    auto& state = m_islands.find(layout->Info().key)->second;
+    if (!state.visited)
+    {
+        state.visited = true;
+        state.dirty = !MapState::SaveVisited(layout->Info().key);
+    }
+}
+
+bool World::WasVisited(IslandKey key) const
+{
+    const auto found = m_islands.find(key);
+    return found != m_islands.end() && found->second.visited;
+}
+
+WorldPosition World::StartSpawn() const
+{
+    auto p = m_start->Info().center;
+    const auto q = m_start->Spawn();
+    p.Move(q.x, q.z);
+    return p;
+}
+
+WorldPosition World::StartShip(float length) const
+{
+    return ShipyardMooring({0, 0}, length);
+}
+
+WorldPosition World::ShipyardMooring(IslandKey key, float length) const
+{
+    const auto found = m_islands.find(key);
+    if (found == m_islands.end())
+    {
+        return WorldPosition{};
+    }
+    const auto& layout = *found->second.layout;
+    auto position = layout.Info().center;
+    const auto local = layout.ShipSpawn(length);
+    position.Move(local.x, local.z);
+    return position;
+}
+
+float World::OutboundHeading(IslandKey key) const
+{
+    const auto found = m_islands.find(key);
+    if (found == m_islands.end())
+    {
+        return 0;
+    }
+    const auto d = found->second.layout->PierDirection();
+    return std::atan2(d.x, -d.z);
+}
+
+TownInteraction World::ServiceAt(const WorldPosition& player) const
+{
+    TownInteraction result;
+    float nearest = 2.2f;
+    for (const auto& entry : m_islands)
+    {
+        const auto& layout = *entry.second.layout;
+        for (auto kind : {TownServiceKind::Shop, TownServiceKind::Shipyard})
         {
-            return false;
+            auto point = layout.Info().center;
+            const auto local = kind == TownServiceKind::Shop ? layout.ShopPoint() : layout.ShipyardPoint();
+            point.Move(local.x, local.z);
+            if (!IsActive(point))
+            {
+                continue;
+            }
+            const auto relative = point.RelativeTo(player);
+            const float distance = std::hypot(relative.x, relative.z);
+            if (distance < nearest)
+            {
+                nearest = distance;
+                result.kind = kind;
+                result.island = entry.first;
+                result.position = point;
+            }
         }
     }
-    return true;
+    return result;
+}
+
+WorldPosition World::StartVillage() const
+{
+    auto p = m_start->Info().center;
+    const auto q = m_start->VillageCenter();
+    p.Move(q.x, q.z);
+    return p;
+}
+
+size_t World::VisibleChunks() const
+{
+    size_t count = 0;
+    for (const auto& entry : m_chunks)
+    {
+        count += entry.second.visible ? 1 : 0;
+    }
+    return count;
 }
 
 void World::Prepare(const WorldPosition& camera, float time, bool grid)
@@ -442,21 +563,51 @@ void World::Prepare(const WorldPosition& camera, float time, bool grid)
     m_scene.Get<OceanActor>(m_ocean)->extent = static_cast<float>((m_radius + 2) * ChunkSize);
     for (const auto& entry : m_chunks)
     {
-        WorldPosition origin;
-        origin.chunkX = entry.first.first;
-        origin.chunkZ = entry.first.second;
-        origin.x = 0;
-        origin.z = 0;
-        m_scene.Find(entry.second.actor)->transform.position = origin.RelativeTo(camera);
+        if (!entry.second.visible)
+        {
+            continue;
+        }
+        m_scene.Find(entry.second.actor)->transform.position = Origin(entry.first).RelativeTo(camera);
         auto* waves = m_scene.Get<WaveActor>(entry.second.waves);
         waves->time = time;
         waves->grid = grid;
     }
-    WorldPosition origin;
-    origin.x = 0;
-    origin.z = 0;
-    auto* tutorial = m_scene.Find(m_tutorialActor);
-    tutorial->transform.position = origin.RelativeTo(camera);
-    const auto p = tutorial->transform.position;
-    tutorial->visible = std::abs(p.x) < 400 && std::abs(p.z) < 400;
+}
+
+void World::DrawMap(Renderer& r, const WorldPosition& center, float left, float top, float extent) const
+{
+    const float range = static_cast<float>((std::max)(2, m_radius) * ChunkSize);
+    const float scale = extent / (2 * range);
+    for (const auto& entry : m_islands)
+    {
+        const auto& layout = *entry.second.layout;
+        const auto offset = layout.Info().center.RelativeTo(center);
+        if (std::abs(offset.x) > range + MapCatalog::MaximumIslandSize ||
+            std::abs(offset.z) > range + MapCatalog::MaximumIslandSize)
+        {
+            continue;
+        }
+        const float size = layout.CellSize() * scale;
+        for (int i = 0; i < IslandLayout::Size * IslandLayout::Size; ++i)
+        {
+            const auto p = layout.Center(i);
+            if (!layout.Land(p.x, p.z))
+            {
+                continue;
+            }
+            const float x = left + extent * .5f + (offset.x + p.x - layout.CellSize() * .5f) * scale;
+            const float z = top + extent * .5f + (offset.z + p.z - layout.CellSize() * .5f) * scale;
+            if (x < left || z < top || x + size > left + extent || z + size > top + extent)
+            {
+                continue;
+            }
+            r.Panel(
+                x,
+                z,
+                size,
+                size,
+                layout.Village(p.x, p.z) ? Color{.85f, .73f, .43f} : Color{.61f, .72f, .40f});
+        }
+    }
+    r.Panel(left + extent * .5f - 2, top + extent * .5f - 2, 4, 4, {.96f, .90f, .72f});
 }

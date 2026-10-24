@@ -75,7 +75,7 @@ EnemyActor::EnemyActor(
     bool isBoss,
     Vec3 spawn,
     float health)
-    : Actor(isBoss ? "산호갑각 대장" : "섬 게"), home(spawn), target(spawn), boss(isBoss), hp(health),
+    : Actor(isBoss ? "산호갑각 대장" : "산호 게"), home(spawn), target(spawn), boss(isBoss), hp(health),
       maxHp(health), m_context(context), m_normal(meshes.enemies[isBoss ? 2 : 0]),
       m_flash(meshes.enemies[isBoss ? 3 : 1]), m_warning(meshes.warnings[isBoss ? 1 : 0])
 {
@@ -252,6 +252,13 @@ DropActor::DropActor(GameplayContext& context, const LevelMeshes& meshes, Vec3 p
     transform.position = position;
 }
 
+DropActor::DropActor(GameplayContext& context, const LevelMeshes& meshes, Vec3 position, CoralLoot kind)
+    : MeshActor(meshes.trophies[kind == CoralLoot::Boss ? 1 : 0], EconomyRules::LootName(kind)),
+      m_context(context), weapon(0), m_trophy(true), m_trophyKind(kind), persistent(kind == CoralLoot::Boss)
+{
+    transform.position = position;
+}
+
 void DropActor::Update(float dt)
 {
     const Vec3 player = m_context.player;
@@ -280,7 +287,14 @@ void DropActor::Update(float dt)
         m_context.terrain.Segment(player.x, player.z, transform.position.x, transform.position.z))
     {
         collected = true;
-        m_context.collect(weapon);
+        if (m_trophy)
+        {
+            m_context.collectTrophy(m_trophyKind);
+        }
+        else
+        {
+            m_context.collect(weapon);
+        }
         Destroy();
     }
 }
