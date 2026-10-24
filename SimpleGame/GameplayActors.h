@@ -83,7 +83,7 @@ class SlashActor : public MeshActor
 {
 public:
     explicit SlashActor(CachedMesh mesh);
-    void Trigger(Vec3 position, Vec3 aim);
+    void Trigger(Vec3 position, Vec3 aim, float groundHeight = .55f);
     void Stop();
 
     bool Attacking() const

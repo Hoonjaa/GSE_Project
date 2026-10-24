@@ -2,6 +2,7 @@
 in vec3 v_Color;
 uniform bool u_HdrScene;
 uniform float u_SceneIntensity;
+uniform float u_SceneLight;
 layout(location = 0) out vec4 FragColor;
 
 void main()
@@ -13,5 +14,6 @@ void main()
                     pow((max(color, vec3(0.0)) + 0.055) / 1.055, vec3(2.4)),
                     step(vec3(0.04045), color)) * u_SceneIntensity;
     }
+    color *= u_SceneLight;
     FragColor = vec4(color, 1.0);
 }

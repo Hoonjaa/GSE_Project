@@ -4,6 +4,7 @@ in vec2 v_UV;
 uniform sampler2D u_Font;
 uniform bool u_HdrScene;
 uniform float u_SceneIntensity;
+uniform float u_SceneLight;
 layout(location = 0) out vec4 FragColor;
 
 void main()
@@ -18,5 +19,6 @@ void main()
                     step(vec3(0.04045), color)) *
                 u_SceneIntensity;
     }
+    color *= u_SceneLight;
     FragColor = vec4(color, coverage);
 }

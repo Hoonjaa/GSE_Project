@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Prototype.h"
 #include "KoreanText.h"
+#include "MeshCache.h"
 #include <cmath>
 #include <sstream>
 #include <iomanip>
@@ -150,6 +151,7 @@ void Prototype::CreateActors()
     auto& markerActor =
         m_scene.Create<MeshActor>(m_playerActor, CachedMesh(std::move(marker), "player_marker"), "발밑 표시");
     markerActor.transform.position.y = .58f;
+    m_playerMarker = markerActor.Id();
     Mesh playerModel = Character({.17f, .43f, .63f});
     float bodyRadius = 0;
     for (const auto& vertex : playerModel)
@@ -176,6 +178,59 @@ void Prototype::CreateActors()
         vertex.position.z *= playerScale;
     }
     m_scene.Create<MeshActor>(m_playerBody, CachedMesh(std::move(sword), "equipped_sword"), "장착 무기");
+
+    const auto wheel = MeshCache::LoadOrCreate(
+        "ship_wheel_v1",
+        []
+        {
+            Mesh mesh;
+            Box(mesh, {-.05f, 0, -.05f}, {.1f, .8f, .1f}, {.39f, .22f, .12f});
+            for (int i = 0; i < 16; ++i)
+            {
+                const float a = i * 2 * Pi / 16, b = (i + 1) * 2 * Pi / 16;
+                Quad(
+                    mesh,
+                    {.32f * std::cos(a), .8f + .32f * std::sin(a), 0},
+                    {.32f * std::cos(b), .8f + .32f * std::sin(b), 0},
+                    {.26f * std::cos(b), .8f + .26f * std::sin(b), 0},
+                    {.26f * std::cos(a), .8f + .26f * std::sin(a), 0},
+                    Gold);
+            }
+            Box(mesh, {-.3f, .77f, -.025f}, {.6f, .06f, .05f}, Gold);
+            Box(mesh, {-.03f, .5f, -.025f}, {.06f, .6f, .05f}, Gold);
+            return mesh;
+        });
+    m_wheel = m_scene.Create<MeshActor>(m_shipActor, wheel, "타륜").Id();
+    m_scene.Find(m_wheel)->transform.position = ShipDeck::Helm();
+    const auto slash = MeshCache::LoadOrCreate(
+        "deck_slash_v1",
+        []
+        {
+            Mesh mesh;
+            for (int i = 0; i < 20; ++i)
+            {
+                const float a = -.95f + i * 1.9f / 20, b = a + 1.9f / 20;
+                Quad(
+                    mesh,
+                    {1.8f * std::cos(a), 1.1f, 1.8f * std::sin(a)},
+                    {1.8f * std::cos(b), 1.1f, 1.8f * std::sin(b)},
+                    {2.7f * std::cos(b), 1.1f, 2.7f * std::sin(b)},
+                    {2.7f * std::cos(a), 1.1f, 2.7f * std::sin(a)},
+                    Gold);
+            }
+            return mesh;
+        });
+    m_deckSlash = m_scene.Create<SlashActor>(m_shipActor, slash).Id();
+    const auto rod = MeshCache::LoadOrCreate(
+        "fishing_rod_v1",
+        []
+        {
+            Mesh mesh;
+            Box(mesh, {.18f, .75f, -2}, {.03f, .03f, 2.1f}, {.57f, .37f, .18f});
+            Box(mesh, {.19f, -.95f, -2}, {.012f, 1.7f, .012f}, {.8f, .87f, .8f});
+            return mesh;
+        });
+    m_fishingRod = m_scene.Create<MeshActor>(m_playerBody, rod, "낚싯대").Id();
 
     auto& harbor = m_scene.Create<WorldActor>(m_actorsRoot, "항구 주민 및 장식");
     m_harbor = harbor.Id();
@@ -206,7 +261,7 @@ void Prototype::PrepareActors()
     auto& ship = ShipActor();
     ship.Prepare(m_camera);
     ship.transform.rotation = m_shipHeading;
-    ship.visible = m_world.IsActive(ship.location);
+    ship.visible = m_economy.HasShip() && m_world.IsActive(ship.location);
     ship.enabled = ship.visible;
     const float shipScale = EconomyRules::SailboatLength / 3.85f;
     m_scene.Get<ScaledMeshActor>(m_shipBody)->scale = {shipScale, shipScale, shipScale};
@@ -215,15 +270,28 @@ void Prototype::PrepareActors()
         EconomyRules::SailboatLength * (1.7f / 3.85f) / 3,
         1,
         EconomyRules::SailboatLength / 3};
-    m_scene.Find(m_shipBody)->transform.position.y = .045f * std::sin(m_time * 2);
-    m_scene.Find(m_wake)->visible = m_sailing && m_moving;
+    const float bob = .045f * std::sin(m_time * 2);
+    ship.transform.position.y = bob;
+    m_scene.Find(m_shadow)->transform.position.y = -bob;
+    m_scene.Find(m_wake)->transform.position.y = -bob;
+    m_scene.Find(m_wake)->visible = Sailing() && m_moving;
 
     auto& player = Player();
-    player.Prepare(m_camera);
-    player.transform.rotation = m_heading;
-    player.visible = !m_sailing;
+    if (Aboard())
+    {
+        player.transform.position = m_deckPosition;
+        player.transform.rotation = m_deckFacing;
+    }
+    else
+    {
+        player.Prepare(m_camera);
+        player.transform.rotation = m_heading;
+    }
+    player.visible = true;
+    m_scene.Find(m_playerMarker)->transform.position.y = Aboard() ? .02f : .58f;
     m_scene.Find(m_playerBody)->transform.position.y =
-        .58f + (m_moving ? .035f * std::abs(std::sin(m_time * 12)) : 0);
+        (Aboard() ? .03f : .58f) + (m_moving ? .035f * std::abs(std::sin(m_time * 12)) : 0);
+    m_scene.Find(m_fishingRod)->visible = m_fishing;
 
     auto* harbor = m_scene.Get<WorldActor>(m_harbor);
     harbor->Prepare(m_camera);

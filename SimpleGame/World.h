@@ -36,6 +36,7 @@ public:
     bool CanWalk(const WorldPosition& position) const;
     bool CanSail(const WorldPosition& position, float heading, float length) const;
     bool IsActive(const WorldPosition& position) const;
+    bool ConservativeSea(const WorldPosition& position, float radius) const;
     bool TutorialActive() const;
 
     const LevelOneTerrain& Tutorial() const

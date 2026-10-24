@@ -12,7 +12,7 @@ namespace KoreanText
     constexpr const char* Sailing = "항해 중";
     constexpr const char* Walking = "도보 이동";
     constexpr const char* Chunk = " / 청크 ";
-    constexpr const char* Movement = "WASD 이동 / 좌클릭 공격 / F 강화 / E 시설 이용·승선·하선";
+    constexpr const char* Movement = "WASD 이동 / 클릭 공격 / F 강화·낚시 / E 시설·승선·타륜·하선 / I 적재창";
     constexpr const char* Tools = "Space 달리기 / 휠 줌 / V 후처리 안내 / R 항구 복귀 / Esc 종료";
     constexpr const char* Welcome =
         "산호 몬스터 전리품을 상점에서 팔아 50골드를 모으세요. 조선소에서 첫 돛단배를 구매할 수 있습니다.";
@@ -29,7 +29,7 @@ namespace KoreanText
     constexpr const char* Off = "꺼짐";
     constexpr const char* Unavailable = "사용 불가";
     constexpr const char* Exposure = " / 노출 ";
-    constexpr const char* PostControls = "P 전체 / 1 톤 매핑 / 2 비넷 / 3 외곽 흐림";
+    constexpr const char* PostControls = "B 전체 / 1 톤 매핑 / 2 비넷 / 3 외곽 흐림";
     constexpr const char* ExposureControls = "[ ] 노출 조절 / 0 후처리 초기화";
     constexpr const char* ToneLabel = "톤 매핑 ";
     constexpr const char* VignetteLabel = " / 비넷 ";

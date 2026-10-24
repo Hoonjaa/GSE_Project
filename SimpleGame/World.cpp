@@ -358,6 +358,24 @@ bool World::IsActive(const WorldPosition& p) const
     return chunk && chunk->visible;
 }
 
+bool World::ConservativeSea(const WorldPosition& p, float radius) const
+{
+    const auto sector = IslandGeneration::Sector(p.chunkX, p.chunkZ);
+    for (int z = -1; z <= 1; ++z)
+    {
+        for (int x = -1; x <= 1; ++x)
+        {
+            const auto descriptor = IslandGeneration::Describe({sector.x + x, sector.z + z});
+            const auto distance = descriptor.center.RelativeTo(p);
+            if (std::hypot(distance.x, distance.z) <= descriptor.width + radius)
+            {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 bool World::TutorialActive() const
 {
     // This also covers the starter shore and dock outside its center chunk.

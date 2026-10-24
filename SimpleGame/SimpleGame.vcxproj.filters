@@ -18,6 +18,8 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <Text Include="..\doc\player.md" />
+    <Text Include="..\doc\PLAYER_IMPLEMENTATION_REPORT.md" />
     <Text Include="..\doc\map.md" />
     <Text Include="..\doc\MAP_IMPLEMENTATION_REPORT.md" />
     <Text Include="..\doc\TOWN_SERVICES_README.md" />
@@ -77,6 +79,15 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="World.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ShipDeck.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="MarineActors.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="MarineSystem.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="Prototype.h">
@@ -160,6 +171,24 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="World.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ShipDeck.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MarineActors.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MarineSystem.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MarineMeshes.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="PrototypePlayer.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="PrototypePlayerHud.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="Prototype.cpp">

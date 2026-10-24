@@ -358,6 +358,7 @@ Renderer::Renderer(int w, int h) : m_width(w), m_height(h)
     m_worldProjection = glGetUniformLocation(m_worldProgram, "u_ProjectionScale");
     m_worldHdr = glGetUniformLocation(m_worldProgram, "u_HdrScene");
     m_worldIntensity = glGetUniformLocation(m_worldProgram, "u_SceneIntensity");
+    m_worldLight = glGetUniformLocation(m_worldProgram, "u_SceneLight");
     glGenVertexArrays(1, &m_vao);
     glGenBuffers(1, &m_vbo);
     glGenBuffers(1, &m_instanceVbo);
@@ -465,6 +466,11 @@ void Renderer::SetPostProcessing(const PostProcessingSettings& settings)
     m_postSettings.blurEnd = bounded(settings.blurEnd, .98f, m_postSettings.blurStart + .01f, 1.5f);
 }
 
+void Renderer::SetSceneLight(float brightness)
+{
+    m_sceneLight = std::isfinite(brightness) ? (std::max)(.1f, (std::min)(1.5f, brightness)) : 1.f;
+}
+
 void Renderer::Begin(float zoom)
 {
     m_statistics.Reset();
@@ -496,16 +502,16 @@ void Renderer::Begin(float zoom)
     {
         m_post->BeginScene();
         glClearColor(
-            LinearColor(.055f) * m_postSettings.sceneIntensity,
-            LinearColor(.40f) * m_postSettings.sceneIntensity,
-            LinearColor(.51f) * m_postSettings.sceneIntensity,
+            LinearColor(.055f) * m_postSettings.sceneIntensity * m_sceneLight,
+            LinearColor(.40f) * m_postSettings.sceneIntensity * m_sceneLight,
+            LinearColor(.51f) * m_postSettings.sceneIntensity * m_sceneLight,
             1);
     }
     else
     {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, m_width, m_height);
-        glClearColor(.055f, .40f, .51f, 1);
+        glClearColor(.055f * m_sceneLight, .40f * m_sceneLight, .51f * m_sceneLight, 1);
     }
     glDepthMask(GL_TRUE);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -598,6 +604,7 @@ void Renderer::FlushWorld()
     glUniform2f(m_worldProjection, m_zoom * 2 / m_width, m_zoom * 2 / m_height);
     glUniform1i(m_worldHdr, m_hdrScene && !m_overlay);
     glUniform1f(m_worldIntensity, m_postSettings.sceneIntensity);
+    glUniform1f(m_worldLight, m_overlay ? 1.f : m_sceneLight);
     for (const auto& key : m_pendingOrder)
     {
         auto& gpu = m_meshCache.find(key)->second;
@@ -693,6 +700,7 @@ void Renderer::Flush()
     glUseProgram(m_program);
     glUniform1i(glGetUniformLocation(m_program, "u_HdrScene"), m_hdrScene && !m_overlay);
     glUniform1f(glGetUniformLocation(m_program, "u_SceneIntensity"), m_postSettings.sceneIntensity);
+    glUniform1f(glGetUniformLocation(m_program, "u_SceneLight"), m_overlay ? 1.f : m_sceneLight);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, m_font ? m_font->texture : 0);
     glBindVertexArray(m_vao);

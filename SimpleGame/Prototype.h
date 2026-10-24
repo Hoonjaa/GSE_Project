@@ -2,6 +2,8 @@
 #include "World.h"
 #include "WorldActors.h"
 #include "LevelOne.h"
+#include "ShipDeck.h"
+#include "MarineSystem.h"
 #include <array>
 #include <string>
 
@@ -16,6 +18,7 @@ public:
     void Zoom(int direction);
     void MouseAttack(int x, int y, const Renderer& renderer);
     bool CloseServiceMenu();
+    void DebugSeaThreat(int kind);
 
     size_t ActorCount() const
     {
@@ -47,16 +50,43 @@ private:
     void Reset();
     void Interact();
     void Move(double dx, double dz);
+    bool BoardShip();
+    bool LeaveShip();
+    void BoardInteract();
+    void SyncBoardedPlayer();
+    void ToggleFishing();
+    void ToggleCargo();
+    void CargoKey(unsigned char key);
+    void UpdateFishing(float dt);
+    void SummonSeaThreat(SeaEncounter kind);
+    void RenderPlayerPanel(Renderer& renderer) const;
+    void RenderPlayerStatus(Renderer& renderer) const;
+
+    bool Aboard() const
+    {
+        return m_playerMode != PlayerMode::Land;
+    }
+
+    bool Sailing() const
+    {
+        return m_playerMode == PlayerMode::Helm;
+    }
+
+    bool PlayerPanelOpen() const
+    {
+        return m_cargoOpen || m_service.kind != TownServiceKind::None;
+    }
 
     WorldPosition ActivePosition() const
     {
-        return m_sailing ? ShipActor().location : Player().location;
+        return Sailing() ? ShipActor().location : Player().location;
     }
 
     SceneGraph m_scene;
     World m_world;
     PlayerEconomy m_economy;
     LevelOne m_levelOne;
+    std::unique_ptr<MarineSystem> m_marine;
     WorldPosition m_camera;
     ActorId m_actorsRoot = NoActor, m_playerActor = NoActor, m_shipActor = NoActor;
     ActorId m_playerBody = NoActor, m_shipBody = NoActor, m_shadow = NoActor, m_wake = NoActor,
@@ -64,7 +94,14 @@ private:
     std::array<bool, 256> m_keys = {};
     TownInteraction m_service;
     std::string m_serviceMessage;
-    bool m_sailing = false, m_grid = false, m_hud = true, m_moving = false;
+    PlayerMode m_playerMode = PlayerMode::Land;
+    Vec3 m_deckPosition = {};
+    float m_deckFacing = 0, m_fishTime = 0;
+    bool m_cargoOpen = false, m_fishing = false;
+    unsigned m_cargoSelection = 0;
+    ActorId m_playerMarker = NoActor;
+    ActorId m_wheel = NoActor, m_deckSlash = NoActor, m_fishingRod = NoActor;
+    bool m_grid = false, m_hud = true, m_moving = false;
     bool m_postHud = false;
     float m_zoom = 30, m_time = 0, m_heading = 0, m_shipHeading = 0, m_messageTime = 0;
     double m_frameAverage = 1.0 / 60.0;

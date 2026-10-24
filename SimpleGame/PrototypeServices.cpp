@@ -7,6 +7,12 @@
 
 bool Prototype::CloseServiceMenu()
 {
+    if (m_cargoOpen)
+    {
+        m_cargoOpen = false;
+        ClearInput();
+        return true;
+    }
     if (m_service.kind == TownServiceKind::None)
     {
         return false;
@@ -71,6 +77,11 @@ void Prototype::ServiceKey(unsigned char key)
     {
         return;
     }
+    if (key == 'i')
+    {
+        ToggleCargo();
+        return;
+    }
     if (key == 'b' || key == 'u')
     {
         BuySailboat();
@@ -105,7 +116,7 @@ void Prototype::ServiceKey(unsigned char key)
 
 void Prototype::RenderServiceMenu(Renderer& renderer) const
 {
-    if (m_service.kind == TownServiceKind::None)
+    if (m_cargoOpen || m_service.kind == TownServiceKind::None)
     {
         return;
     }
@@ -131,7 +142,7 @@ void Prototype::RenderServiceMenu(Renderer& renderer) const
     renderer.Text(
         left + 20,
         top + 16,
-        shop ? "상점 · 산호 전리품 매입" : "조선소 · 선박 구매 및 업그레이드",
+        shop ? "상점 · 전리품과 물고기 매입" : "조선소 · 선박 구매 및 업그레이드",
         gold,
         2,
         width - 40);
@@ -146,18 +157,14 @@ void Prototype::RenderServiceMenu(Renderer& renderer) const
         width - 40);
     if (shop)
     {
-        renderer.Text(
-            left + 20,
-            top + 102,
-            "일반 산호 전리품 1개 = 5골드 / 보스 전리품 1개 = 20골드",
-            gold,
-            1.4f,
-            width - 40);
-        renderer.Text(left + 20, top + 128, "[S] 소지 전리품 전부 판매", paper, 1.6f);
+        renderer
+            .Text(left + 20, top + 102, "일반 5골드 / 보스 20골드 / 물고기 2골드", gold, 1.4f, width - 40);
+        renderer.Text(left + 20, top + 128, "[S] 판매 가능한 소지품 전부 판매", paper, 1.6f);
         renderer.Text(
             left + 20,
             top + 153,
-            "배에 실은 전리품은 조선소에서 내린 후 판매하세요.",
+            "물고기 " + std::to_string(m_economy.ItemCount(InventoryItem::Fish)) +
+                "마리 / 적재품은 내린 뒤 판매",
             paper,
             1.2f,
             width - 40);
@@ -183,7 +190,7 @@ void Prototype::RenderServiceMenu(Renderer& renderer) const
         renderer.Text(
             left + 20,
             top + 174,
-            "1 일반 적재 / 2 보스 적재 / 3 일반 내리기 / 4 보스 내리기",
+            "I: 전체 적재창 / 1·2 산호 싣기 / 3·4 산호 내리기",
             paper,
             1.2f,
             width - 40);
@@ -194,8 +201,8 @@ void Prototype::RenderServiceMenu(Renderer& renderer) const
             std::string label = std::to_string(i + 1) + ". ";
             if (slot.occupied)
             {
-                label += std::string(EconomyRules::LootName(slot.kind)) + " " + std::to_string(slot.count) +
-                         "/" + std::to_string(EconomyRules::StackLimit(slot.kind));
+                label += std::string(EconomyRules::ItemName(slot.item)) + " " + std::to_string(slot.count) +
+                         "/" + std::to_string(EconomyRules::ItemStack(slot.item));
             }
             else
             {

@@ -55,7 +55,9 @@ enum class MeshAnimation
     None = 0,
     Waves = 1,
     Flag = 2,
-    Gull = 3
+    Gull = 3,
+    Rain = 4,
+    Tornado = 5
 };
 
 struct MeshInstance
@@ -103,6 +105,7 @@ public:
     Vec2 Project(Vec3 relativePosition) const;
     Vec3 ScreenGround(int x, int y, float height = .55f) const;
     void SetPostProcessing(const PostProcessingSettings& settings);
+    void SetSceneLight(float brightness);
 
     bool PostProcessingAvailable() const
     {
@@ -198,7 +201,8 @@ private:
     std::uint64_t m_nextMeshId = 1;
     GLuint m_worldProgram = 0;
     GLint m_worldProjection = -1;
-    GLint m_worldHdr = -1, m_worldIntensity = -1;
+    GLint m_worldHdr = -1, m_worldIntensity = -1, m_worldLight = -1;
+    float m_sceneLight = 1;
     int m_width, m_height;
     float m_zoom = 28;
     Mesh m_batch;

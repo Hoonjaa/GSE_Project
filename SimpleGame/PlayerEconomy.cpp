@@ -1,81 +1,143 @@
 #include "stdafx.h"
 #include "PlayerEconomy.h"
 #include "Diagnostics.h"
+#include "MapCatalog.h"
 #include <algorithm>
 #include <limits>
 
+InventoryItem EconomyRules::CoralItem(CoralLoot kind)
+{
+    return kind == CoralLoot::Boss ? InventoryItem::BossCoral : InventoryItem::NormalCoral;
+}
+
+const char* EconomyRules::ItemName(InventoryItem item)
+{
+    switch (item)
+    {
+        case InventoryItem::NormalCoral:
+            return "산호 전리품";
+        case InventoryItem::BossCoral:
+            return "보스 산호 전리품";
+        case InventoryItem::Fish:
+            return "물고기";
+        case InventoryItem::Tentacle:
+            return "크라켄 촉수";
+        default:
+            const auto id = static_cast<unsigned>(item);
+            if (id >= 4 && id < ItemCount)
+            {
+                return MapCatalog::GoodName(static_cast<TradeGood>(id - 4));
+            }
+            return "알 수 없는 아이템";
+    }
+}
+
+std::int64_t EconomyRules::ItemPrice(InventoryItem item)
+{
+    switch (item)
+    {
+        case InventoryItem::NormalCoral:
+            return 5;
+        case InventoryItem::BossCoral:
+            return 20;
+        case InventoryItem::Fish:
+            return 2;
+        default:
+            return 0; // No price means unavailable, not a free transaction.
+    }
+}
+
+std::int64_t EconomyRules::ItemStack(InventoryItem item)
+{
+    switch (item)
+    {
+        case InventoryItem::NormalCoral:
+        case InventoryItem::BossCoral:
+        case InventoryItem::Fish:
+        case InventoryItem::Tentacle:
+            return 20;
+        default:
+            return 0; // Further item limits need game-design configuration.
+    }
+}
+
 const char* EconomyRules::LootName(CoralLoot kind)
 {
-    return kind == CoralLoot::Boss ? "보스 산호 전리품" : "산호 전리품";
+    return ItemName(CoralItem(kind));
 }
 
 std::int64_t EconomyRules::SellPrice(CoralLoot kind)
 {
-    return kind == CoralLoot::Boss ? 20 : 5;
+    return ItemPrice(CoralItem(kind));
 }
 
 std::int64_t EconomyRules::StackLimit(CoralLoot kind)
 {
-    // Per-item policy: new items can have different limits without changing cargo.
-    switch (kind)
-    {
-        case CoralLoot::Normal:
-            return 20;
-        case CoralLoot::Boss:
-            return 20;
-    }
-    return 0;
-}
-
-std::int64_t& PlayerEconomy::Bag(CoralLoot kind)
-{
-    return kind == CoralLoot::Boss ? m_boss : m_normal;
+    return ItemStack(CoralItem(kind));
 }
 
 std::int64_t PlayerEconomy::LootCount(CoralLoot kind) const
 {
-    return kind == CoralLoot::Boss ? m_boss : m_normal;
+    return ItemCount(EconomyRules::CoralItem(kind));
+}
+
+std::int64_t PlayerEconomy::ItemCount(InventoryItem item) const
+{
+    const auto id = static_cast<size_t>(item);
+    return id < m_bag.size() ? m_bag[id] : 0;
 }
 
 bool PlayerEconomy::Collect(CoralLoot kind)
 {
-    auto& count = Bag(kind);
-    if (count == (std::numeric_limits<std::int64_t>::max)())
+    return CollectItem(EconomyRules::CoralItem(kind));
+}
+
+bool PlayerEconomy::CollectItem(InventoryItem item)
+{
+    const auto id = static_cast<size_t>(item);
+    if (id >= m_bag.size() || m_bag[id] == (std::numeric_limits<std::int64_t>::max)())
     {
         return false;
     }
-    ++count;
-    Diagnostics::Get().Event(
-        "coral_loot_collected kind=" + std::to_string(static_cast<int>(kind)) +
-        " bag_count=" + std::to_string(count));
+    ++m_bag[id];
+    Diagnostics::Get().Event("item_collected id=" + std::to_string(id) + " bag=" + std::to_string(m_bag[id]));
     return true;
 }
 
 EconomyResult PlayerEconomy::SellAll()
 {
-    if (!m_normal && !m_boss)
+    auto remaining = (std::numeric_limits<std::int64_t>::max)() - m_gold;
+    std::int64_t revenue = 0;
+    for (size_t i = 0; i < m_bag.size(); ++i)
     {
-        return {false, "판매할 산호 전리품이 없습니다."};
+        const auto price = EconomyRules::ItemPrice(static_cast<InventoryItem>(i));
+        if (price <= 0)
+        {
+            continue;
+        }
+        if (m_bag[i] > remaining / price)
+        {
+            return {false, "골드 보유 한도를 초과합니다."};
+        }
+        const auto value = m_bag[i] * price;
+        remaining -= value;
+        revenue += value;
     }
-    const auto maximum = (std::numeric_limits<std::int64_t>::max)();
-    const auto normalPrice = EconomyRules::SellPrice(CoralLoot::Normal);
-    const auto bossPrice = EconomyRules::SellPrice(CoralLoot::Boss);
-    if (m_normal > (maximum - m_gold) / normalPrice)
+    if (!revenue)
     {
-        return {false, "골드 보유 한도를 초과합니다."};
+        return {false, "판매 가능한 전리품이나 물고기가 없습니다."};
     }
-    const auto normalValue = m_normal * normalPrice;
-    if (m_boss > (maximum - m_gold - normalValue) / bossPrice)
+    for (size_t i = 0; i < m_bag.size(); ++i)
     {
-        return {false, "골드 보유 한도를 초과합니다."};
+        if (EconomyRules::ItemPrice(static_cast<InventoryItem>(i)) > 0)
+        {
+            m_bag[i] = 0;
+        }
     }
-    const auto revenue = normalValue + m_boss * bossPrice;
-    Diagnostics::Get().Event(
-        "coral_loot_sold normal=" + std::to_string(m_normal) + " boss=" + std::to_string(m_boss) +
-        " revenue=" + std::to_string(revenue) + " gold_before=" + std::to_string(m_gold));
     m_gold += revenue;
-    m_normal = m_boss = 0;
-    return {true, "전리품을 판매했습니다. +" + std::to_string(revenue) + "골드"};
+    Diagnostics::Get().Event(
+        "inventory_items_sold revenue=" + std::to_string(revenue) + " gold=" + std::to_string(m_gold));
+    return {true, "전리품과 물고기를 판매했습니다. +" + std::to_string(revenue) + "골드"};
 }
 
 EconomyResult PlayerEconomy::BuySailboat()
@@ -86,13 +148,12 @@ EconomyResult PlayerEconomy::BuySailboat()
     }
     if (m_gold < EconomyRules::SailboatPrice)
     {
-        return {false, "골드가 부족합니다. 돛단배 구매에는 50골드가 필요합니다."};
+        return {false, "돛단배 구매에는 50골드가 필요합니다."};
     }
     m_gold -= EconomyRules::SailboatPrice;
     m_hasShip = true;
-    Diagnostics::Get().Event(
-        "sailboat_purchased price=50 length_m=8 companions=1 cargo_kinds=5 gold=" + std::to_string(m_gold));
-    return {true, "8m 돛단배를 구매했습니다! 동료 1명 / 적재 5종류. 부두에서 승선하세요."};
+    Diagnostics::Get().Event("sailboat_purchased price=50 length=8 companions=1 cargo_kinds=5");
+    return {true, "8m 돛단배 구매 완료! 부두에서 E로 승선하세요."};
 }
 
 size_t PlayerEconomy::UsedCargoKinds() const
@@ -107,19 +168,34 @@ size_t PlayerEconomy::UsedCargoKinds() const
 
 EconomyResult PlayerEconomy::Store(CoralLoot kind)
 {
+    return StoreItem(EconomyRules::CoralItem(kind));
+}
+
+EconomyResult PlayerEconomy::Unload(CoralLoot kind)
+{
+    return UnloadItem(EconomyRules::CoralItem(kind));
+}
+
+EconomyResult PlayerEconomy::StoreItem(InventoryItem item)
+{
     if (!m_hasShip)
     {
         return {false, "돛단배를 먼저 구매하세요."};
     }
-    auto& bag = Bag(kind);
+    const auto id = static_cast<size_t>(item), limit = static_cast<size_t>(EconomyRules::ItemStack(item));
+    if (id >= m_bag.size() || !limit)
+    {
+        return {false, "이 아이템의 중첩 한도가 아직 설정되지 않았습니다."};
+    }
+    auto& bag = m_bag[id];
     if (!bag)
     {
-        return {false, "소지품에 해당 전리품이 없습니다."};
+        return {false, "소지품에 해당 아이템이 없습니다."};
     }
     CargoSlot* selected = nullptr;
     for (auto& slot : m_cargo)
     {
-        if (slot.occupied && slot.kind == kind)
+        if (slot.occupied && slot.item == item)
         {
             selected = &slot;
             break;
@@ -138,52 +214,98 @@ EconomyResult PlayerEconomy::Store(CoralLoot kind)
     }
     if (!selected)
     {
-        return {false, "적재 가능한 아이템 종류 5칸을 모두 사용 중입니다."};
+        return {false, "5종류 적재 슬롯을 모두 사용 중입니다."};
     }
-    const auto limit = EconomyRules::StackLimit(kind);
     const auto existing = selected->occupied ? selected->count : 0;
-    const auto moved = (std::min)(bag, limit - existing);
+    const auto moved = (std::min)(bag, static_cast<std::int64_t>(limit) - existing);
     if (moved <= 0)
     {
-        return {false, "이 아이템은 종류별 최대 중첩 수에 도달했습니다."};
+        return {false, "종류별 최대 중첩 수에 도달했습니다."};
     }
     selected->occupied = true;
-    selected->kind = kind;
+    selected->item = item;
     selected->count = existing + moved;
     bag -= moved;
-    Diagnostics::Get().Event(
-        "cargo_store kind=" + std::to_string(static_cast<int>(kind)) + " count=" + std::to_string(moved));
-    return {
-        true,
-        std::string(EconomyRules::LootName(kind)) + " " + std::to_string(moved) + "개를 배에 실었습니다."};
+    Diagnostics::Get().Event("cargo_store item=" + std::to_string(id) + " count=" + std::to_string(moved));
+    return {true, std::string(EconomyRules::ItemName(item)) + " " + std::to_string(moved) + "개 적재"};
 }
 
-EconomyResult PlayerEconomy::Unload(CoralLoot kind)
+EconomyResult PlayerEconomy::UnloadItem(InventoryItem item)
 {
     if (!m_hasShip)
     {
         return {false, "돛단배를 먼저 구매하세요."};
     }
+    const auto id = static_cast<size_t>(item);
+    if (id >= m_bag.size())
+    {
+        return {false, "알 수 없는 아이템입니다."};
+    }
     for (auto& slot : m_cargo)
     {
-        if (!slot.occupied || slot.kind != kind)
+        if (!slot.occupied || slot.item != item)
         {
             continue;
         }
-        auto& bag = Bag(kind);
-        if (slot.count > (std::numeric_limits<std::int64_t>::max)() - bag)
+        if (slot.count > (std::numeric_limits<std::int64_t>::max)() - m_bag[id])
         {
             return {false, "소지품 보유 한도를 초과합니다."};
         }
         const auto moved = slot.count;
-        bag += moved;
+        m_bag[id] += moved;
         slot = CargoSlot{};
         Diagnostics::Get().Event(
-            "cargo_unload kind=" + std::to_string(static_cast<int>(kind)) +
-            " count=" + std::to_string(moved));
-        return {
-            true,
-            std::string(EconomyRules::LootName(kind)) + " " + std::to_string(moved) + "개를 내렸습니다."};
+            "cargo_unload item=" + std::to_string(id) + " count=" + std::to_string(moved));
+        return {true, std::string(EconomyRules::ItemName(item)) + " " + std::to_string(moved) + "개 내리기"};
     }
-    return {false, "배에 해당 전리품이 없습니다."};
+    return {false, "배에 해당 아이템이 없습니다."};
+}
+
+std::int64_t PlayerEconomy::CargoUnits() const
+{
+    std::int64_t total = 0;
+    for (const auto& slot : m_cargo)
+    {
+        if (slot.occupied)
+        {
+            total += slot.count;
+        }
+    }
+    return total;
+}
+
+int PlayerEconomy::LoseCargoUnits(int amount, std::mt19937& random)
+{
+    int lost = 0;
+    while (lost < amount)
+    {
+        const auto total = CargoUnits();
+        if (total <= 0)
+        {
+            break;
+        }
+        auto pick = std::uniform_int_distribution<std::int64_t>(0, total - 1)(random);
+        for (auto& slot : m_cargo)
+        {
+            if (!slot.occupied)
+            {
+                continue;
+            }
+            if (pick >= slot.count)
+            {
+                pick -= slot.count;
+                continue;
+            }
+            Diagnostics::Get().Event(
+                "cargo_lost item=" + std::to_string(static_cast<unsigned>(slot.item)) + " count=1");
+            --slot.count;
+            if (!slot.count)
+            {
+                slot = CargoSlot{};
+            }
+            ++lost;
+            break;
+        }
+    }
+    return lost;
 }

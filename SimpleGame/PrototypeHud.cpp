@@ -13,7 +13,7 @@ namespace
 
 void Prototype::RenderHud(Renderer& r)
 {
-    if (m_hud && m_service.kind == TownServiceKind::None)
+    if (m_hud && !PlayerPanelOpen())
     {
         const float W = static_cast<float>(r.Width()), H = static_cast<float>(r.Height());
         const float font = W < 950 ? 1.5f : 2.f;
@@ -114,10 +114,11 @@ void Prototype::RenderHud(Renderer& r)
             Paper,
             1.3f,
             402);
+        RenderPlayerStatus(r);
         const auto active = ActivePosition();
         std::ostringstream status;
-        status << (m_sailing ? KoreanText::Sailing : KoreanText::Walking) << KoreanText::Chunk
-               << active.chunkX << " : " << active.chunkZ;
+        status << (Sailing() ? KoreanText::Sailing : (Aboard() ? "갑판 이동" : KoreanText::Walking))
+               << KoreanText::Chunk << active.chunkX << " : " << active.chunkZ;
         r.Panel(20, H - 122, W - 40, 102, Ink);
         r.Panel(20, H - 122, 4, 102, Gold);
         r.Text(38, H - 108, status.str(), Gold, font);
@@ -137,4 +138,5 @@ void Prototype::RenderHud(Renderer& r)
         }
     }
     RenderServiceMenu(r);
+    RenderPlayerPanel(r);
 }

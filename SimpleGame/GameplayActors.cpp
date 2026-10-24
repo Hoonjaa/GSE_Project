@@ -334,9 +334,9 @@ SlashActor::SlashActor(CachedMesh resource) : MeshActor(std::move(resource), "ê·
     visible = false;
 }
 
-void SlashActor::Trigger(Vec3 position, Vec3 aim)
+void SlashActor::Trigger(Vec3 position, Vec3 aim, float groundHeight)
 {
-    transform.position = {position.x, 0, position.z};
+    transform.position = {position.x, groundHeight - .55f, position.z};
     transform.rotation = std::atan2(aim.z, aim.x);
     m_time = .2f;
     visible = true;

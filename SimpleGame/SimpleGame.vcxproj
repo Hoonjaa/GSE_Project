@@ -152,6 +152,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <Text Include="..\doc\player.md" />
+    <Text Include="..\doc\PLAYER_IMPLEMENTATION_REPORT.md" />
     <Text Include="..\doc\map.md" />
     <Text Include="..\doc\MAP_IMPLEMENTATION_REPORT.md" />
     <Text Include="..\doc\TOWN_SERVICES_README.md" />
@@ -178,6 +180,9 @@
     <ClInclude Include="PlayerEconomy.h" />
     <ClInclude Include="TownServiceActor.h" />
     <ClInclude Include="World.h" />
+    <ClInclude Include="ShipDeck.h" />
+    <ClInclude Include="MarineActors.h" />
+    <ClInclude Include="MarineSystem.h" />
     <ClInclude Include="Prototype.h" />
     <ClInclude Include="KoreanText.h" />
     <ClInclude Include="PostProcessing.h" />
@@ -207,6 +212,12 @@
     <ClCompile Include="TownServiceActor.cpp" />
     <ClCompile Include="PrototypeServices.cpp" />
     <ClCompile Include="World.cpp" />
+    <ClCompile Include="ShipDeck.cpp" />
+    <ClCompile Include="MarineActors.cpp" />
+    <ClCompile Include="MarineSystem.cpp" />
+    <ClCompile Include="MarineMeshes.cpp" />
+    <ClCompile Include="PrototypePlayer.cpp" />
+    <ClCompile Include="PrototypePlayerHud.cpp" />
     <ClCompile Include="Prototype.cpp" />
     <ClCompile Include="PostProcessing.cpp" />
     <ClCompile Include="LevelOneTerrain.cpp" />
@@ -233,7 +244,7 @@
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>opengl32.lib;gdi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>opengl32.lib;gdi32.lib;winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

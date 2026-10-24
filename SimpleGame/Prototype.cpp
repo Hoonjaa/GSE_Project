@@ -14,6 +14,7 @@ namespace
 Prototype::Prototype() : m_world(m_scene), m_levelOne(m_scene, m_world.Tutorial(), m_economy)
 {
     CreateActors();
+    m_marine.reset(new MarineSystem(m_scene, m_world, m_economy, m_shipActor));
     Reset();
 }
 
@@ -21,9 +22,16 @@ void Prototype::Reset()
 {
     Player().location = m_world.StartSpawn();
     ShipActor().location = m_world.StartShip(EconomyRules::SailboatLength);
+    m_cargoOpen = m_fishing = false;
     CloseServiceMenu();
+    m_playerMode = PlayerMode::Land;
+    m_scene.SetParent(m_playerActor, m_actorsRoot);
+    if (m_marine)
+    {
+        m_marine->Reset();
+    }
+    m_scene.Get<SlashActor>(m_deckSlash)->Stop();
     m_camera = Player().location;
-    m_sailing = false;
     m_heading = 0;
     m_shipHeading = m_world.OutboundHeading({0, 0});
     m_keys.fill(false);
@@ -49,6 +57,26 @@ void Prototype::Key(unsigned char key, bool down)
     {
         return;
     }
+    if ((key == 'o' || key == 'p') && !PlayerPanelOpen())
+    {
+        SummonSeaThreat(key == 'o' ? SeaEncounter::Storm : SeaEncounter::Kraken);
+        return;
+    }
+    if (m_marine && m_marine->Captured() && Aboard() && key != 'r')
+    {
+        m_fishing = false;
+        m_marine->EscapeKey(key);
+        if (!m_marine->Captured())
+        {
+            ClearInput();
+        }
+        return;
+    }
+    if (m_cargoOpen)
+    {
+        CargoKey(key);
+        return;
+    }
     if (m_service.kind != TownServiceKind::None)
     {
         ServiceKey(key);
@@ -68,13 +96,23 @@ void Prototype::Key(unsigned char key, bool down)
         case 'r':
             Reset();
             break;
+        case 'i':
+            ToggleCargo();
+            break;
         case 'f':
-            m_levelOne.Upgrade();
+            if (Aboard())
+            {
+                ToggleFishing();
+            }
+            else
+            {
+                m_levelOne.Upgrade();
+            }
             break;
         case 'v':
             m_postHud = !m_postHud;
             break;
-        case 'p':
+        case 'b':
             m_postSettings.enabled = !m_postSettings.enabled;
             m_message = m_postSettings.enabled ? KoreanText::PostEnabled : KoreanText::PostDisabled;
             m_messageTime = 5;
@@ -115,7 +153,7 @@ void Prototype::Zoom(int direction)
 
 void Prototype::MouseAttack(int x, int y, const Renderer& renderer)
 {
-    if (m_service.kind != TownServiceKind::None)
+    if (PlayerPanelOpen())
     {
         return;
     }
@@ -128,13 +166,38 @@ void Prototype::MouseAttack(int x, int y, const Renderer& renderer)
     {
         return;
     }
-    const auto hit = renderer.ScreenGround(x, y);
+    if (Sailing())
+    {
+        m_message = "E로 타륜 조종을 마친 뒤 공격하세요.";
+        m_messageTime = 3;
+        return;
+    }
+    if (Aboard() && m_marine && m_marine->Captured())
+    {
+        return;
+    }
+    if (m_hud && Aboard() && x >= (std::max)(20, renderer.Width() - 450) && y >= 235 && y < 420)
+    {
+        return;
+    }
+    const auto hit = renderer.ScreenGround(x, y, Aboard() ? ShipDeck::Height() + .5f : .55f);
     const auto relative = Player().location.RelativeTo(m_camera);
     const Vec3 aim = {hit.x - relative.x, 0, hit.z - relative.z};
     WorldPosition origin;
     origin.x = 0;
     origin.z = 0;
-    m_levelOne.Attack(Player().location.RelativeTo(origin), aim, m_sailing);
+    if (Aboard())
+    {
+        m_fishing = false;
+        if (m_marine->Attack(Player().location, aim, m_levelOne.Damage(), m_shipHeading, true))
+        {
+            const auto localAim = ShipDeck::ToLocal(aim, m_shipHeading);
+            m_deckFacing = std::atan2(localAim.x, -localAim.z);
+            m_scene.Get<SlashActor>(m_deckSlash)->Trigger(m_deckPosition, localAim, ShipDeck::Height());
+        }
+        return;
+    }
+    m_levelOne.Attack(Player().location.RelativeTo(origin), aim, false);
     if (m_levelOne.Attacking())
     {
         m_heading = std::atan2(aim.x, -aim.z);
@@ -143,69 +206,24 @@ void Prototype::MouseAttack(int x, int y, const Renderer& renderer)
 
 void Prototype::Interact()
 {
-    if (!m_sailing)
+    if (Aboard())
     {
-        m_service = m_world.ServiceAt(Player().location);
-        if (m_service.kind != TownServiceKind::None)
-        {
-            ClearInput();
-            m_serviceMessage.clear();
-            return;
-        }
-        const Vec3 d = ShipActor().location.RelativeTo(Player().location);
-        if (!m_economy.HasShip())
-        {
-            m_message = "조선소 구역에서 E를 눌러 50골드에 돛단배를 구매하세요.";
-            m_messageTime = 5;
-            return;
-        }
-        const float c = std::cos(m_shipHeading), s = std::sin(m_shipHeading);
-        const float x = d.x * c + d.z * s, z = -d.x * s + d.z * c;
-        const float halfLength = EconomyRules::SailboatLength * .5f;
-        const float halfBeam = EconomyRules::SailboatLength * (1.7f / 3.85f) * .5f;
-        const float reach = 1.2f;
-        if ((x * x) / ((halfBeam + reach) * (halfBeam + reach)) +
-                (z * z) / ((halfLength + reach) * (halfLength + reach)) <
-            1)
-        {
-            m_sailing = true;
-            m_message = KoreanText::Boarded;
-        }
-        else
-        {
-            m_message = KoreanText::TooFarToBoard;
-        }
+        BoardInteract();
+        return;
     }
-    else
+    m_service = m_world.ServiceAt(Player().location);
+    if (m_service.kind != TownServiceKind::None)
     {
-        // Search nearby shore/dock points without moving or discarding the ship.
-        bool landed = false;
-        for (float margin = .35f; margin <= 1.25f && !landed; margin += .15f)
-        {
-            for (int i = 0; i < 32 && !landed; ++i)
-            {
-                auto candidate = ShipActor().location;
-                const float a = 2 * Pi * i / 32;
-                const float x = (EconomyRules::SailboatLength * (1.7f / 3.85f) * .5f + margin) * std::cos(a);
-                const float z = (EconomyRules::SailboatLength * .5f + margin) * std::sin(a);
-                const float c = std::cos(m_shipHeading), s = std::sin(m_shipHeading);
-                candidate.Move(x * c - z * s, x * s + z * c);
-                if (m_world.CanWalk(candidate))
-                {
-                    Player().location = candidate;
-                    m_sailing = false;
-                    landed = true;
-                }
-            }
-        }
-        m_message = landed ? KoreanText::Landed : KoreanText::TooFarToLand;
+        ClearInput();
+        m_serviceMessage.clear();
+        return;
     }
-    m_messageTime = 5;
+    BoardShip();
 }
 
 void Prototype::Move(double dx, double dz)
 {
-    auto& position = m_sailing ? ShipActor().location : Player().location;
+    auto& position = Sailing() ? ShipActor().location : Player().location;
     auto tryStep = [&](double x, double z)
     {
         if (x == 0 && z == 0)
@@ -214,7 +232,7 @@ void Prototype::Move(double dx, double dz)
         }
         auto next = position;
         next.Move(x, z);
-        if (m_sailing ? m_world.CanSail(next, m_shipHeading, EconomyRules::SailboatLength)
+        if (Sailing() ? m_world.CanSail(next, m_shipHeading, EconomyRules::SailboatLength)
                       : m_world.CanWalk(next))
         {
             position = next;
@@ -267,7 +285,7 @@ void Prototype::Update(double dt, int width, int height)
         });
     double horizontal = (m_keys['d'] ? 1.0 : 0) - (m_keys['a'] ? 1.0 : 0);
     double vertical = (m_keys['s'] ? 1.0 : 0) - (m_keys['w'] ? 1.0 : 0);
-    if (m_service.kind != TownServiceKind::None)
+    if (PlayerPanelOpen() || (Aboard() && m_marine->Captured()))
     {
         horizontal = vertical = 0;
     }
@@ -279,21 +297,55 @@ void Prototype::Update(double dt, int width, int height)
         vertical /= length;
         double dx = (horizontal + vertical) * .70710678118;
         double dz = (-horizontal + vertical) * .70710678118;
-        if (!m_levelOne.Attacking())
+        m_fishing = false;
+        if (m_playerMode == PlayerMode::Deck)
         {
-            m_heading = static_cast<float>(std::atan2(dx, -dz));
+            const auto local = ShipDeck::ToLocal({float(dx), 0, float(dz)}, m_shipHeading);
+            const auto previous = m_deckPosition;
+            ShipDeck::Move(
+                m_deckPosition,
+                local.x * 3.6f * static_cast<float>(dt),
+                local.z * 3.6f * static_cast<float>(dt));
+            m_deckFacing = std::atan2(local.x, -local.z);
+            m_moving = std::hypot(previous.x - m_deckPosition.x, previous.z - m_deckPosition.z) > .001f;
         }
-        if (m_sailing && m_world.CanSail(ShipActor().location, m_heading, EconomyRules::SailboatLength))
+        else
         {
-            m_shipHeading = m_heading;
+            if (!m_levelOne.Attacking())
+            {
+                m_heading = static_cast<float>(std::atan2(dx, -dz));
+            }
+            if (Sailing() && m_world.CanSail(ShipActor().location, m_heading, EconomyRules::SailboatLength))
+            {
+                m_shipHeading = m_heading;
+            }
+            const double speed = (Sailing() ? 7.5 : 3.6) * (m_keys[' '] ? 1.8 : 1);
+            Move(dx * speed * dt, dz * speed * dt);
         }
-        const double speed = (m_sailing ? 7.5 : 3.6) * (m_keys[' '] ? 1.8 : 1);
-        Move(dx * speed * dt, dz * speed * dt);
     }
+    SyncBoardedPlayer();
+    const bool captured = m_marine->Captured();
+    if (m_marine->Update(static_cast<float>(dt), ShipActor().location, Aboard(), m_shipHeading))
+    {
+        const auto notice = m_marine->Notice();
+        Reset();
+        m_message = notice;
+        m_messageTime = 8;
+        m_world.Update(ActivePosition(), radius);
+    }
+    if (Aboard() && captured != m_marine->Captured())
+    {
+        m_cargoOpen = false;
+        CloseServiceMenu();
+        m_fishing = false;
+        ClearInput();
+    }
+    UpdateFishing(static_cast<float>(dt));
+
     WorldPosition origin;
     origin.x = 0;
     origin.z = 0;
-    m_levelOne.BeginFrame(static_cast<float>(dt), Player().location.RelativeTo(origin), m_sailing);
+    m_levelOne.BeginFrame(static_cast<float>(dt), Player().location.RelativeTo(origin), Aboard());
     m_scene.Update(static_cast<float>(dt));
     if (m_levelOne.EndFrame())
     {
@@ -307,16 +359,16 @@ void Prototype::Update(double dt, int width, int height)
 
 void Prototype::Render(Renderer& r)
 {
+    PrepareActors();
+    m_marine->Prepare(m_camera, ShipActor().location);
+    r.SetSceneLight(m_marine->Light());
     r.SetPostProcessing(m_postSettings);
     r.Begin(m_zoom);
     m_world.Prepare(m_camera, m_time, m_grid);
     WorldPosition origin;
     origin.x = 0;
     origin.z = 0;
-    m_levelOne.Prepare(
-        origin.RelativeTo(m_camera),
-        m_hud && !m_postHud && m_service.kind == TownServiceKind::None);
-    PrepareActors();
+    m_levelOne.Prepare(origin.RelativeTo(m_camera), m_hud && !m_postHud && !PlayerPanelOpen());
     m_scene.Render(r);
     r.BeginOverlay();
     m_scene.Overlay(r);

@@ -29,6 +29,15 @@ void main()
     {
         local.y += sin(i_Animation.y) * 0.16 * a_Metadata.y;
     }
+    else if (mode == 4)
+    {
+        local.y -= mod(i_Animation.y * 12.0 + a_Metadata.x, 18.0);
+    }
+    else if (mode == 5)
+    {
+        float angle = i_Animation.y * 3.0 + local.y * 0.8;
+        local.xz = mat2(cos(angle), sin(angle), -sin(angle), cos(angle)) * local.xz;
+    }
     local *= i_Scale;
     vec3 p = vec3(
         local.x * i_Rotation.x - local.z * i_Rotation.y,

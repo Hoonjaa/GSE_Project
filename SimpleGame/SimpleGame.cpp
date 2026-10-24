@@ -89,6 +89,18 @@ namespace
         }
     }
 
+    void SpecialDown(int key, int, int)
+    {
+#ifdef _DEBUG
+        if (game && key >= GLUT_KEY_F6 && key <= GLUT_KEY_F8)
+        {
+            game->DebugSeaThreat(key - GLUT_KEY_F6 + 1);
+        }
+#else
+        (void)key;
+#endif
+    }
+
     void KeyUp(unsigned char key, int, int)
     {
         if (game)
@@ -160,7 +172,8 @@ int main(int argc, char** argv)
     {
     }
     std::cout << "OpenGL: " << glGetString(GL_VERSION) << "\n"
-              << "WASD: move | Space: boost | E: board/land | Wheel: zoom\n"
+              << "WASD: move | Space: boost | E: board/helm/land | F: upgrade/fish | I: cargo\n"
+              << "O: summon tornado | P: summon kraken | B: post processing\n"
               << "G: chunk grid | H: HUD | R: return home | Escape: exit\n";
     auto glInfo = [](GLenum name)
     {
@@ -185,6 +198,7 @@ int main(int argc, char** argv)
     glutReshapeFunc(Resize);
     glutKeyboardFunc(KeyDown);
     glutKeyboardUpFunc(KeyUp);
+    glutSpecialFunc(SpecialDown);
     glutMouseWheelFunc(Wheel);
     glutMouseFunc(Mouse);
     glutEntryFunc(Entry);
