@@ -53,6 +53,9 @@ private:
     bool BoardShip();
     bool LeaveShip();
     void BoardInteract();
+    void PirateInteract();
+    float CurrentDeckHeading() const;
+    float CurrentDeckHeight() const;
     void SyncBoardedPlayer();
     void ToggleFishing();
     void ToggleCargo();
@@ -95,6 +98,7 @@ private:
     TownInteraction m_service;
     std::string m_serviceMessage;
     PlayerMode m_playerMode = PlayerMode::Land;
+    int m_boardedPirate = -1;
     Vec3 m_deckPosition = {};
     float m_deckFacing = 0, m_fishTime = 0;
     bool m_cargoOpen = false, m_fishing = false;

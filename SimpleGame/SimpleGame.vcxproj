@@ -154,6 +154,7 @@
   <ItemGroup>
     <Text Include="..\doc\player.md" />
     <Text Include="..\doc\PLAYER_IMPLEMENTATION_REPORT.md" />
+    <Text Include="..\doc\PIRATE_BOARDING_REPORT.md" />
     <Text Include="..\doc\map.md" />
     <Text Include="..\doc\MAP_IMPLEMENTATION_REPORT.md" />
     <Text Include="..\doc\TOWN_SERVICES_README.md" />
@@ -183,6 +184,7 @@
     <ClInclude Include="ShipDeck.h" />
     <ClInclude Include="MarineActors.h" />
     <ClInclude Include="MarineSystem.h" />
+    <ClInclude Include="PirateRaid.h" />
     <ClInclude Include="Prototype.h" />
     <ClInclude Include="KoreanText.h" />
     <ClInclude Include="PostProcessing.h" />
@@ -216,6 +218,8 @@
     <ClCompile Include="MarineActors.cpp" />
     <ClCompile Include="MarineSystem.cpp" />
     <ClCompile Include="MarineMeshes.cpp" />
+    <ClCompile Include="PirateRaid.cpp" />
+    <ClCompile Include="PrototypePirate.cpp" />
     <ClCompile Include="PrototypePlayer.cpp" />
     <ClCompile Include="PrototypePlayerHud.cpp" />
     <ClCompile Include="Prototype.cpp" />

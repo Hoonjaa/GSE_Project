@@ -15,7 +15,12 @@ namespace
     }
 }
 
-MarineSystem::MarineSystem(SceneGraph& scene, World& world, PlayerEconomy& economy, ActorId shipRoot)
+MarineSystem::MarineSystem(
+    SceneGraph& scene,
+    World& world,
+    PlayerEconomy& economy,
+    ActorId shipRoot,
+    std::function<bool(int)> hitPlayer)
     : m_scene(scene), m_world(world), m_economy(economy), m_shipRoot(shipRoot)
 {
     const auto seed = static_cast<unsigned>(std::chrono::steady_clock::now().time_since_epoch().count());
@@ -35,6 +40,21 @@ MarineSystem::MarineSystem(SceneGraph& scene, World& world, PlayerEconomy& econo
     {
         id = m_scene.Create<TornadoActor>(m_root, m_meshes.tornado).Id();
     }
+    m_raid.reset(new PirateRaid(
+        m_scene,
+        m_world,
+        m_economy,
+        m_root,
+        m_pirates,
+        m_meshes.raider,
+        m_meshes.cutlass,
+        m_meshes.chest,
+        m_random,
+        [this](const std::string& text)
+        {
+            Notify(text);
+        },
+        std::move(hitPlayer)));
     Reset();
 }
 
@@ -62,6 +82,7 @@ void MarineSystem::Notify(const std::string& text)
 
 void MarineSystem::Reset()
 {
+    m_raid->Reset();
     m_encounter = SeaEncounter::None;
     m_health = 100;
     m_havePatrol = m_captured = false;
@@ -98,6 +119,7 @@ bool MarineSystem::SafeSea(const WorldPosition& p, float heading) const
 
 void MarineSystem::Patrol(const WorldPosition& ship)
 {
+    m_raid->Reset();
     m_patrolAnchor = ship;
     m_havePatrol = true;
     for (size_t i = 0; i < m_pirates.size(); ++i)
@@ -177,7 +199,7 @@ void MarineSystem::Begin(SeaEncounter kind, const WorldPosition& ship)
     }
     else
     {
-        Notify("해적선이 추격합니다! 갑판에서 두 척을 모두 격파하세요.");
+        Notify("해적선이 추격합니다! 접근하면 빨간 두건 해적들이 승선합니다.");
     }
 }
 
@@ -217,7 +239,12 @@ void MarineSystem::DamageShip(float damage)
         "ship_damage amount=" + std::to_string(damage) + " health=" + std::to_string(m_health));
 }
 
-bool MarineSystem::Update(float dt, const WorldPosition& ship, bool aboard, float shipHeading)
+bool MarineSystem::Update(
+    float dt,
+    const WorldPosition& ship,
+    bool aboard,
+    float shipHeading,
+    const RaidPlayer& player)
 {
     m_ship = ship;
     m_time += dt;
@@ -273,15 +300,20 @@ bool MarineSystem::Update(float dt, const WorldPosition& ship, bool aboard, floa
     }
     if (m_encounter == SeaEncounter::None || m_encounter == SeaEncounter::Pirates)
     {
-        int alive = 0;
+        bool chasing = false;
+        int shipIndex = -1;
         for (auto id : m_pirates)
         {
+            ++shipIndex;
             auto* actor = Target(id);
             if (actor->health <= 0)
             {
                 continue;
             }
-            ++alive;
+            if (m_raid->Attached(shipIndex))
+            {
+                continue;
+            }
             const float distance = Distance(actor->location, ship);
             if (aboard && distance <= 50)
             {
@@ -299,6 +331,7 @@ bool MarineSystem::Update(float dt, const WorldPosition& ship, bool aboard, floa
             {
                 continue;
             }
+            chasing = true;
             actor->coarseTime += dt;
             if (!m_world.IsActive(actor->location) && actor->coarseTime < .2f)
             {
@@ -338,19 +371,26 @@ bool MarineSystem::Update(float dt, const WorldPosition& ship, bool aboard, floa
                     actor->location = next;
                 }
             }
-            actor->cooldown -= stepTime;
-            if (Distance(actor->location, ship) <= contact + .5f && actor->cooldown <= 0)
+            if (Distance(actor->location, ship) <= contact + .15f)
             {
-                DamageShip(10);
-                actor->cooldown = 2;
+                m_raid->Attach(shipIndex, ship, shipHeading);
             }
         }
-        if (m_encounter == SeaEncounter::Pirates && !alive)
+        m_raid->Update(dt, shipHeading, player);
+        if (m_raid->Failed())
+        {
+            const int lost = m_economy.LoseCargoUnits(3, m_random);
+            Notify(
+                "사망했습니다. " + m_raid->Failure() + " 적재품 " + std::to_string(lost) +
+                "개를 잃고 항구로 귀환합니다.");
+            return true;
+        }
+        if (m_encounter == SeaEncounter::Pirates && !chasing && !m_raid->Active())
         {
             m_encounter = SeaEncounter::None;
-            Notify("해적선 두 척을 모두 격파했습니다!");
         }
-        else if (m_encounter == SeaEncounter::Pirates && Distance(ship, m_patrolAnchor) > 150)
+        else if (
+            m_encounter == SeaEncounter::Pirates && !m_raid->Active() && Distance(ship, m_patrolAnchor) > 150)
         {
             m_encounter = SeaEncounter::None;
             Patrol(ship);
@@ -479,10 +519,12 @@ bool MarineSystem::Attack(const WorldPosition& player, Vec3 aim, int damage, flo
     };
     if (m_encounter == SeaEncounter::Pirates)
     {
-        for (auto id : m_pirates)
+        if (aboard)
         {
-            auto* actor = Target(id);
-            hit(actor, actor->location, 3.5f);
+            m_raid->Attack(
+                ShipDeck::ToLocal(player.RelativeTo(m_ship), shipHeading),
+                ShipDeck::ToLocal(aim, shipHeading),
+                damage);
         }
     }
     if (m_encounter == SeaEncounter::Kraken)
@@ -501,6 +543,7 @@ bool MarineSystem::Attack(const WorldPosition& player, Vec3 aim, int damage, flo
 
 void MarineSystem::Prepare(const WorldPosition& camera, const WorldPosition& ship)
 {
+    m_raid->Prepare(camera, ship, m_scene.Find(m_shipRoot)->transform.rotation);
     for (auto id : m_pirates)
     {
         auto* a = Target(id);
@@ -540,6 +583,7 @@ bool MarineSystem::ForceStart(SeaEncounter kind, const WorldPosition& ship)
         return false;
     }
     const auto previous = m_encounter;
+    m_raid->Reset();
     EndStorm();
     m_ship = ship;
     m_escapeTime = 0;

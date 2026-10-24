@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Prototype.h"
 #include "KoreanText.h"
+#include "Diagnostics.h"
 #include <cmath>
 #include <sstream>
 #include <iomanip>
@@ -14,7 +15,21 @@ namespace
 Prototype::Prototype() : m_world(m_scene), m_levelOne(m_scene, m_world.Tutorial(), m_economy)
 {
     CreateActors();
-    m_marine.reset(new MarineSystem(m_scene, m_world, m_economy, m_shipActor));
+    m_marine.reset(new MarineSystem(
+        m_scene,
+        m_world,
+        m_economy,
+        m_shipActor,
+        [this](int damage)
+        {
+            const float previous = m_levelOne.Health();
+            m_levelOne.TakeSeaDamage(damage);
+            Diagnostics::Get().Event(
+                "pirate_player_damage requested=" + std::to_string(damage) +
+                " applied=" + std::to_string(previous - m_levelOne.Health()) +
+                " health=" + std::to_string(m_levelOne.Health()));
+            return m_levelOne.Health() <= 0;
+        }));
     Reset();
 }
 
@@ -25,7 +40,9 @@ void Prototype::Reset()
     m_cargoOpen = m_fishing = false;
     CloseServiceMenu();
     m_playerMode = PlayerMode::Land;
+    m_boardedPirate = -1;
     m_scene.SetParent(m_playerActor, m_actorsRoot);
+    m_scene.SetParent(m_deckSlash, m_shipActor);
     if (m_marine)
     {
         m_marine->Reset();
@@ -180,7 +197,7 @@ void Prototype::MouseAttack(int x, int y, const Renderer& renderer)
     {
         return;
     }
-    const auto hit = renderer.ScreenGround(x, y, Aboard() ? ShipDeck::Height() + .5f : .55f);
+    const auto hit = renderer.ScreenGround(x, y, Aboard() ? CurrentDeckHeight() + .5f : .55f);
     const auto relative = Player().location.RelativeTo(m_camera);
     const Vec3 aim = {hit.x - relative.x, 0, hit.z - relative.z};
     WorldPosition origin;
@@ -189,11 +206,16 @@ void Prototype::MouseAttack(int x, int y, const Renderer& renderer)
     if (Aboard())
     {
         m_fishing = false;
-        if (m_marine->Attack(Player().location, aim, m_levelOne.Damage(), m_shipHeading, true))
+        if (m_marine->Attack(
+                Player().location,
+                aim,
+                m_levelOne.Damage(),
+                m_shipHeading,
+                m_playerMode == PlayerMode::Deck))
         {
-            const auto localAim = ShipDeck::ToLocal(aim, m_shipHeading);
+            const auto localAim = ShipDeck::ToLocal(aim, CurrentDeckHeading());
             m_deckFacing = std::atan2(localAim.x, -localAim.z);
-            m_scene.Get<SlashActor>(m_deckSlash)->Trigger(m_deckPosition, localAim, ShipDeck::Height());
+            m_scene.Get<SlashActor>(m_deckSlash)->Trigger(m_deckPosition, localAim, CurrentDeckHeight());
         }
         return;
     }
@@ -232,7 +254,8 @@ void Prototype::Move(double dx, double dz)
         }
         auto next = position;
         next.Move(x, z);
-        if (Sailing() ? m_world.CanSail(next, m_shipHeading, EconomyRules::SailboatLength)
+        if (Sailing() ? (m_world.CanSail(next, m_shipHeading, EconomyRules::SailboatLength) &&
+                         m_marine->Raid().CanSail(next, m_shipHeading))
                       : m_world.CanWalk(next))
         {
             position = next;
@@ -298,11 +321,12 @@ void Prototype::Update(double dt, int width, int height)
         double dx = (horizontal + vertical) * .70710678118;
         double dz = (-horizontal + vertical) * .70710678118;
         m_fishing = false;
-        if (m_playerMode == PlayerMode::Deck)
+        if (m_playerMode == PlayerMode::Deck || m_playerMode == PlayerMode::PirateDeck)
         {
-            const auto local = ShipDeck::ToLocal({float(dx), 0, float(dz)}, m_shipHeading);
+            const auto local = ShipDeck::ToLocal({float(dx), 0, float(dz)}, CurrentDeckHeading());
             const auto previous = m_deckPosition;
-            ShipDeck::Move(
+            const auto moveDeck = m_playerMode == PlayerMode::PirateDeck ? PirateDeck::Move : ShipDeck::Move;
+            moveDeck(
                 m_deckPosition,
                 local.x * 3.6f * static_cast<float>(dt),
                 local.z * 3.6f * static_cast<float>(dt));
@@ -315,7 +339,8 @@ void Prototype::Update(double dt, int width, int height)
             {
                 m_heading = static_cast<float>(std::atan2(dx, -dz));
             }
-            if (Sailing() && m_world.CanSail(ShipActor().location, m_heading, EconomyRules::SailboatLength))
+            if (Sailing() && m_world.CanSail(ShipActor().location, m_heading, EconomyRules::SailboatLength) &&
+                m_marine->Raid().CanSail(ShipActor().location, m_heading))
             {
                 m_shipHeading = m_heading;
             }
@@ -324,10 +349,20 @@ void Prototype::Update(double dt, int width, int height)
         }
     }
     SyncBoardedPlayer();
+    WorldPosition origin;
+    origin.x = origin.z = 0;
+    m_levelOne.BeginFrame(static_cast<float>(dt), Player().location.RelativeTo(origin), Aboard());
+    RaidPlayer raidPlayer;
+    raidPlayer.deck = m_deckPosition;
+    raidPlayer.ownDeck = m_playerMode == PlayerMode::Deck || Sailing();
     const bool captured = m_marine->Captured();
-    if (m_marine->Update(static_cast<float>(dt), ShipActor().location, Aboard(), m_shipHeading))
+    if (m_marine->Update(static_cast<float>(dt), ShipActor().location, Aboard(), m_shipHeading, raidPlayer))
     {
         const auto notice = m_marine->Notice();
+        if (m_marine->Raid().Failed())
+        {
+            m_levelOne.Die();
+        }
         Reset();
         m_message = notice;
         m_messageTime = 8;
@@ -342,10 +377,7 @@ void Prototype::Update(double dt, int width, int height)
     }
     UpdateFishing(static_cast<float>(dt));
 
-    WorldPosition origin;
-    origin.x = 0;
-    origin.z = 0;
-    m_levelOne.BeginFrame(static_cast<float>(dt), Player().location.RelativeTo(origin), Aboard());
+    SyncBoardedPlayer();
     m_scene.Update(static_cast<float>(dt));
     if (m_levelOne.EndFrame())
     {

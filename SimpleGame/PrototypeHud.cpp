@@ -117,7 +117,9 @@ void Prototype::RenderHud(Renderer& r)
         RenderPlayerStatus(r);
         const auto active = ActivePosition();
         std::ostringstream status;
-        status << (Sailing() ? KoreanText::Sailing : (Aboard() ? "갑판 이동" : KoreanText::Walking))
+        status << (m_playerMode == PlayerMode::PirateDeck
+                       ? "해적선 약탈"
+                       : (Sailing() ? KoreanText::Sailing : (Aboard() ? "갑판 이동" : KoreanText::Walking)))
                << KoreanText::Chunk << active.chunkX << " : " << active.chunkZ;
         r.Panel(20, H - 122, W - 40, 102, Ink);
         r.Panel(20, H - 122, 4, 102, Gold);

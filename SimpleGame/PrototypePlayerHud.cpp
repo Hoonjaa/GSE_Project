@@ -80,20 +80,28 @@ void Prototype::RenderPlayerStatus(Renderer& r) const
     r.Text(
         left + 12,
         top + 8,
-        Sailing() ? "타륜 조종 중 / E: 갑판으로" : "갑판 활동 / 타륜 앞 E: 조종",
+        m_playerMode == PlayerMode::PirateDeck
+            ? "해적선 약탈 중 / 40초 안에 내 배로 복귀"
+            : (Sailing() ? "타륜 조종 중 / E: 갑판으로" : "갑판 활동 / 타륜 앞 E: 조종"),
         gold,
         1.4f,
         width - 24);
     r.Text(
         left + 12,
         top + 34,
-        "선박 체력 " + std::to_string(int(std::ceil(m_marine->ShipHealth()))) + "/100  I: 적재창",
+        "플레이어 " + std::to_string(int(std::ceil(m_levelOne.Health()))) + "/" +
+            std::to_string(m_levelOne.MaxHealth()) + " · 선박 " +
+            std::to_string(int(std::ceil(m_marine->ShipHealth()))) + "/100",
         paper,
         1.4f,
         width - 24);
     r.Panel(left + 12, top + 61, width - 24, 7, {.25f, .17f, .15f});
     r.Panel(left + 12, top + 61, (width - 24) * m_marine->ShipHealth() / 100, 7, {.28f, .73f, .53f});
     std::string activity = "F: 낚시 / 클릭: 공격 / O: 토네이도 / P: 크라켄";
+    if (m_playerMode == PlayerMode::PirateDeck)
+    {
+        activity = "상자 앞 E: 약탈 / 가장자리 E: 내 배 복귀";
+    }
     if (m_fishing)
     {
         activity = "낚시 중 " + std::to_string(int(m_fishTime)) + "/5초 / F: 종료";

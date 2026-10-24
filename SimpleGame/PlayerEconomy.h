@@ -63,6 +63,7 @@ public:
     std::int64_t ItemCount(InventoryItem item) const;
     bool Collect(CoralLoot kind);
     bool CollectItem(InventoryItem item);
+    EconomyResult CollectPirateLoot(int gold, int tentacles);
     EconomyResult SellAll();
     EconomyResult BuySailboat();
     EconomyResult Store(CoralLoot kind);

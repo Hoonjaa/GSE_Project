@@ -19,6 +19,23 @@ public:
     void Attack(Vec3 player, Vec3 aim, bool sailing);
     void Upgrade();
     void Recover();
+
+    void TakeSeaDamage(int damage)
+    {
+        HitPlayer(damage);
+    }
+
+    float Health() const
+    {
+        return m_health;
+    }
+
+    void Die()
+    {
+        m_health = 0;
+        m_context.playerDead = true;
+    }
+
     void Map(Renderer& renderer, float left, float top, float extent, Vec3 player) const;
 
     int Damage() const

@@ -38,8 +38,14 @@ void Prototype::SyncBoardedPlayer()
     {
         return;
     }
-    const auto offset = ShipDeck::ToWorld(m_deckPosition, m_shipHeading);
-    Player().location = ShipActor().location;
+    auto ship = ShipActor().location;
+    PirateDeckInfo info;
+    if (m_playerMode == PlayerMode::PirateDeck && m_marine->Raid().Deck(m_boardedPirate, info))
+    {
+        ship = info.position;
+    }
+    const auto offset = ShipDeck::ToWorld(m_deckPosition, CurrentDeckHeading());
+    Player().location = ship;
     Player().location.Move(offset.x, offset.z);
 }
 
@@ -83,6 +89,11 @@ bool Prototype::LeaveShip()
 
 void Prototype::BoardInteract()
 {
+    if (m_playerMode == PlayerMode::PirateDeck)
+    {
+        PirateInteract();
+        return;
+    }
     if (m_marine->Captured())
     {
         return;
@@ -96,6 +107,26 @@ void Prototype::BoardInteract()
     }
     else
     {
+        int pirate = -1;
+        Vec3 deck;
+        if (ShipDeck::NearEdge(m_deckPosition) && m_marine->Raid().Board(Player().location, pirate, deck))
+        {
+            PirateDeckInfo info;
+            m_marine->Raid().Deck(pirate, info);
+            m_deckFacing += m_shipHeading - info.heading;
+            m_deckPosition = deck;
+            m_playerMode = PlayerMode::PirateDeck;
+            m_boardedPirate = pirate;
+            m_scene.SetParent(m_playerActor, info.actor);
+            m_scene.Get<SlashActor>(m_deckSlash)->Stop();
+            m_scene.SetParent(m_deckSlash, info.actor);
+            m_marine->Raid().Entered(pirate);
+            SyncBoardedPlayer();
+            ClearInput();
+            m_message = "해적선 승선! 상자 앞 E로 약탈하고, 가장자리 E로 내 배에 복귀하세요.";
+            m_messageTime = 5;
+            return;
+        }
         const auto helm = ShipDeck::Helm();
         if (std::hypot(m_deckPosition.x - helm.x, m_deckPosition.z - helm.z) > .9f)
         {
@@ -169,6 +200,12 @@ void Prototype::UpdateFishing(float dt)
 
 void Prototype::ToggleCargo()
 {
+    if (m_playerMode == PlayerMode::PirateDeck)
+    {
+        m_message = "내 배에 돌아온 뒤 적재창을 이용하세요.";
+        m_messageTime = 4;
+        return;
+    }
     if (!m_cargoOpen && (!m_economy.HasShip() || (!Aboard() && !ShipAtService())))
     {
         m_message = "적재창은 배 위 또는 소유 선박이 정박한 마을의 조선소에서 이용하세요.";
@@ -212,6 +249,12 @@ void Prototype::CargoKey(unsigned char key)
 
 void Prototype::SummonSeaThreat(SeaEncounter kind)
 {
+    if (m_playerMode == PlayerMode::PirateDeck)
+    {
+        m_message = "내 배로 돌아온 뒤 해상 소환을 이용하세요.";
+        m_messageTime = 4;
+        return;
+    }
     if (!Aboard() || !m_economy.HasShip())
     {
         Diagnostics::Get().Event("marine_force_rejected reason=not_aboard");

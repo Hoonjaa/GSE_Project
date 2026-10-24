@@ -104,6 +104,23 @@ bool PlayerEconomy::CollectItem(InventoryItem item)
     return true;
 }
 
+EconomyResult PlayerEconomy::CollectPirateLoot(int gold, int tentacles)
+{
+    const auto limit = (std::numeric_limits<std::int64_t>::max)();
+    auto& item = m_bag[static_cast<size_t>(InventoryItem::Tentacle)];
+    if (gold < 0 || tentacles < 0 || gold > limit - m_gold || tentacles > limit - item)
+    {
+        return {false, "보유 한도를 초과해 약탈품을 회수할 수 없습니다."};
+    }
+    m_gold += gold;
+    item += tentacles;
+    Diagnostics::Get().Event(
+        "pirate_loot_claimed gold=" + std::to_string(gold) + " tentacles=" + std::to_string(tentacles));
+    return {
+        true,
+        "약탈 완료! 골드 +" + std::to_string(gold) + " / 크라켄 촉수 +" + std::to_string(tentacles)};
+}
+
 EconomyResult PlayerEconomy::SellAll()
 {
     auto remaining = (std::numeric_limits<std::int64_t>::max)() - m_gold;

@@ -17,8 +17,21 @@ public:
     void Overlay(Renderer& renderer, const ActorTransform& world) const override;
     WorldPosition location;
     float health = 0, maximum = 60, cooldown = 2, coarseTime = 0;
+    float lootTime = -1;
     bool chasing = false;
     MarineTarget kind;
+};
+
+class BoardingPirateActor : public MeshActor
+{
+public:
+    BoardingPirateActor(CachedMesh body, CachedMesh sword);
+    void Render(Renderer& renderer, const ActorTransform& world) const override;
+    void Overlay(Renderer& renderer, const ActorTransform& world) const override;
+    float health = 30, swing = 0;
+
+private:
+    CachedMesh m_sword;
 };
 
 class TornadoActor : public MeshActor

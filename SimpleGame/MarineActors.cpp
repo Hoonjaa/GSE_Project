@@ -40,6 +40,16 @@ void MarineTargetActor::Overlay(Renderer& r, const ActorTransform& world) const
     {
         return;
     }
+    if (kind == MarineTarget::Pirate)
+    {
+        r.Text(
+            screen.x - 60,
+            screen.y - 20,
+            lootTime >= 0 ? "약탈·복귀 " + std::to_string(int(std::ceil(lootTime))) + "초" : "해적선",
+            {.98f, .78f, .4f},
+            1.4f);
+        return;
+    }
     r.Panel(screen.x - 27, screen.y, 54, 5, {.12f, .16f, .20f});
     r.Panel(screen.x - 27, screen.y, 54 * health / maximum, 5, {.91f, .30f, .22f});
     r.Text(
@@ -48,6 +58,31 @@ void MarineTargetActor::Overlay(Renderer& r, const ActorTransform& world) const
         kind == MarineTarget::Pirate ? "해적선" : "촉수",
         {.98f, .78f, .4f},
         1.2f);
+}
+
+BoardingPirateActor::BoardingPirateActor(CachedMesh body, CachedMesh sword)
+    : MeshActor(std::move(body), "빨간 두건 해적"), m_sword(std::move(sword))
+{
+    enabled = visible = false;
+}
+
+void BoardingPirateActor::Render(Renderer& r, const ActorTransform& world) const
+{
+    MeshActor::Render(r, world);
+    r.Submit(m_sword, world.position, world.rotation + std::sin(swing * 12) * .8f);
+}
+
+void BoardingPirateActor::Overlay(Renderer& r, const ActorTransform& world) const
+{
+    auto p = world.position;
+    p.y += 1.9f;
+    const auto screen = r.Project(p);
+    if (screen.x < 0 || screen.x > r.Width() || screen.y < 0 || screen.y > r.Height())
+    {
+        return;
+    }
+    r.Panel(screen.x - 20, screen.y, 40, 5, {.14f, .1f, .1f});
+    r.Panel(screen.x - 20, screen.y, 40 * health / 30, 5, {.9f, .22f, .15f});
 }
 
 TornadoActor::TornadoActor(CachedMesh mesh) : MeshActor(std::move(mesh), "토네이도")
