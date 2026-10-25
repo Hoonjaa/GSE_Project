@@ -91,6 +91,10 @@ namespace
 
     void SpecialDown(int key, int, int)
     {
+        if (game && key >= GLUT_KEY_F1 && key <= GLUT_KEY_F8 && game->SelectTestIsland(key - GLUT_KEY_F1))
+        {
+            return;
+        }
 #ifdef _DEBUG
         if (game && key >= GLUT_KEY_F6 && key <= GLUT_KEY_F8)
         {
@@ -174,6 +178,7 @@ int main(int argc, char** argv)
     std::cout << "OpenGL: " << glGetString(GL_VERSION) << "\n"
               << "WASD: move | Space: boost | E: board/helm/land | F: upgrade/fish | I: cargo\n"
               << "O: summon tornado | P: summon kraken | B: post processing\n"
+              << "T: test map | Test map: F1-F8 islands, Y overview/detail\n"
               << "G: chunk grid | H: HUD | R: return home | Escape: exit\n";
     auto glInfo = [](GLenum name)
     {

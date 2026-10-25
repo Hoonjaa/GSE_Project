@@ -13,7 +13,8 @@ namespace KoreanText
     constexpr const char* Walking = "도보 이동";
     constexpr const char* Chunk = " / 청크 ";
     constexpr const char* Movement = "WASD 이동 / 클릭 공격 / F 강화·낚시 / E 시설·승선·타륜·하선 / I 적재창";
-    constexpr const char* Tools = "Space 달리기 / 휠 줌 / V 후처리 안내 / R 항구 복귀 / Esc 종료";
+    constexpr const char* Tools =
+        "Space 달리기 / 휠 줌 / T 테스트 맵 / V 후처리 안내 / R 항구 복귀 / Esc 종료";
     constexpr const char* Welcome = "몬스터 확인 모드: 초기 골드 50. 조선소에서 배를 구매해 섬별 "
                                     "일반·에픽 몬스터를 확인하세요. 드랍은 비활성화 상태입니다.";
     constexpr const char* Boarded = "출항했습니다. 수평선 너머의 새로운 섬을 찾아보세요.";

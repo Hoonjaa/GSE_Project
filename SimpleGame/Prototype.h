@@ -20,6 +20,7 @@ public:
     void MouseAttack(int x, int y, const Renderer& renderer);
     bool CloseServiceMenu();
     void DebugSeaThreat(int kind);
+    bool SelectTestIsland(unsigned index);
 
     size_t ActorCount() const
     {
@@ -63,6 +64,11 @@ private:
     void CargoKey(unsigned char key);
     void UpdateFishing(float dt);
     void SummonSeaThreat(SeaEncounter kind);
+    void ToggleTestMap();
+    void ToggleTestOverview();
+    void RenderTestMapChart(Renderer& renderer) const;
+    void CaptureTravelState();
+    void RestoreTravelState();
     void RenderPlayerPanel(Renderer& renderer) const;
     void RenderPlayerStatus(Renderer& renderer) const;
 
@@ -92,6 +98,27 @@ private:
     LevelOne m_levelOne;
     std::unique_ptr<MarineSystem> m_marine;
     std::unique_ptr<MonsterSystem> m_monsters;
+    std::unique_ptr<MarineSystem> m_parkedMarine;
+    std::unique_ptr<MonsterSystem> m_parkedMonsters;
+
+    struct TravelState
+    {
+        bool valid = false, overview = false;
+        WorldPosition player, ship, camera;
+        PlayerMode mode = PlayerMode::Land;
+        Vec3 deck = {};
+        int pirate = -1;
+        unsigned island = 0;
+        float heading = 0, shipHeading = 0, facing = 0, zoom = 30, detailZoom = 30;
+        LevelOne::ProgressState progress;
+        std::unique_ptr<PlayerEconomy> economy;
+    };
+
+    std::array<TravelState, 2> m_travel;
+    bool m_testOverview = false;
+    unsigned m_testIsland = 0;
+    float m_detailZoom = 30;
+    int m_viewWidth = 1280, m_viewHeight = 800;
     WorldPosition m_camera;
     ActorId m_actorsRoot = NoActor, m_playerActor = NoActor, m_shipActor = NoActor;
     ActorId m_playerBody = NoActor, m_shipBody = NoActor, m_shadow = NoActor, m_wake = NoActor,

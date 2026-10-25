@@ -35,6 +35,7 @@ public:
     const MonsterDefinition& definition;
     Vec3 home;
     float health, maximum;
+    bool showStatus = true;
 
 private:
     CachedMesh m_model, m_warning, m_epicRing;

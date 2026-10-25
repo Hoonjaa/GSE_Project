@@ -49,6 +49,7 @@ public:
     SeaWeatherActor();
     ~SeaWeatherActor();
     void SetStorm(bool storm);
+    void StopAudio();
     void Update(float dt) override;
     void Render(Renderer& renderer, const ActorTransform& world) const override;
 

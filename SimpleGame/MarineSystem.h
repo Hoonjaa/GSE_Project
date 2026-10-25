@@ -32,6 +32,7 @@ public:
         std::function<bool(int)> hitPlayer);
     ~MarineSystem();
     void Reset();
+    void SetActive(bool active);
     // Returns true when a destroyed ship needs the existing home/recovery flow.
     bool Update(
         float dt,

@@ -111,6 +111,20 @@ void MarineSystem::Reset()
     m_scene.Get<SeaWeatherActor>(m_weather)->SetStorm(false);
 }
 
+void MarineSystem::SetActive(bool active)
+{
+    auto* root = m_scene.Find(m_root);
+    root->visible = root->enabled = active;
+    if (!active)
+    {
+        for (auto id : m_tentacles)
+        {
+            m_scene.Find(id)->visible = false;
+        }
+        m_scene.Get<SeaWeatherActor>(m_weather)->StopAudio();
+    }
+}
+
 bool MarineSystem::SafeSea(const WorldPosition& p, float heading) const
 {
     return m_world.IsActive(p) ? m_world.CanSail(p, heading, EconomyRules::SailboatLength)

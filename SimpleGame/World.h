@@ -32,6 +32,16 @@ public:
     World(const World&) = delete;
     World& operator=(const World&) = delete;
     void Update(const WorldPosition& player, int radius);
+    void SwitchMap();
+
+    bool IsTestMap() const
+    {
+        return m_testMap;
+    }
+
+    WorldPosition TestSpawn(unsigned index) const;
+    WorldPosition TestShip(unsigned index, float length) const;
+    void PrepareWindow(const WorldPosition& player, int radius);
     void Prepare(const WorldPosition& camera, float time, bool grid);
     bool CanWalk(const WorldPosition& position) const;
     bool CanSail(const WorldPosition& position, float heading, float length) const;
@@ -75,6 +85,16 @@ private:
         bool visited = false, dirty = false;
     };
 
+    struct ParkedMap
+    {
+        ActorId root = NoActor;
+        std::map<Key, IslandChunk> chunks;
+        std::map<IslandKey, ResidentIsland> islands;
+        std::deque<Key> pending;
+        Key center = {0, 0};
+        int radius = -1;
+    };
+
     void Generate(Key key);
     void PlaceProps(IslandChunk& chunk, const WorldPosition& origin);
     bool LandAt(const WorldPosition& position, float margin) const;
@@ -90,4 +110,6 @@ private:
     std::deque<Key> m_pending;
     Key m_center = {0, 0};
     int m_radius = -1;
+    bool m_testMap = false;
+    ParkedMap m_parked;
 };

@@ -6,6 +6,15 @@
 class LevelOne
 {
 public:
+    struct ProgressState
+    {
+        int level = 1, xp = 0, weapon = 0, upgrade = 0, stones = 0, kills = 0;
+        float health = 100, invincible = 0, sinceHit = 0, cooldown = 0;
+        bool bossDefeated = false;
+    };
+
+    ProgressState Snapshot() const;
+    void Restore(const ProgressState& state);
     LevelOne(SceneGraph& scene, const LevelOneTerrain& terrain, PlayerEconomy& economy);
     ~LevelOne();
     LevelOne(const LevelOne&) = delete;

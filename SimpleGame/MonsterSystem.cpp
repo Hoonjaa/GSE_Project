@@ -224,9 +224,13 @@ void MonsterSystem::Sync()
     m_scene.CollectDestroyed();
 }
 
-void MonsterSystem::Update(float dt, const WorldPosition& player, bool onLand)
+void MonsterSystem::Update(float dt, const WorldPosition& player, bool onLand, bool paused)
 {
     Sync();
+    if (paused)
+    {
+        return;
+    }
     const auto* current = m_world.CurrentIsland(player);
     for (auto& item : m_groups)
     {
@@ -266,7 +270,16 @@ void MonsterSystem::Update(float dt, const WorldPosition& player, bool onLand)
     }
 }
 
-void MonsterSystem::Prepare(const WorldPosition& camera)
+void MonsterSystem::SetActive(bool active)
+{
+    for (const auto& item : m_groups)
+    {
+        auto* root = m_scene.Find(item.second->root);
+        root->visible = root->enabled = active;
+    }
+}
+
+void MonsterSystem::Prepare(const WorldPosition& camera, bool showStatus)
 {
     for (auto& item : m_groups)
     {
@@ -275,6 +288,7 @@ void MonsterSystem::Prepare(const WorldPosition& camera)
         for (auto id : group.monsters)
         {
             auto* actor = m_scene.Get<MonsterActor>(id);
+            actor->showStatus = showStatus;
             actor->visible =
                 actor->health > 0 && m_world.IsActive(Position(group, actor->transform.position));
         }

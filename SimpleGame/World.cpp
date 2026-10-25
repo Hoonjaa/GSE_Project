@@ -5,6 +5,7 @@
 #include "MapState.h"
 #include "TownServiceActor.h"
 #include "Diagnostics.h"
+#include "IslandTestMap.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -125,9 +126,19 @@ World::~World()
 {
     for (const auto& entry : m_islands)
     {
-        if (entry.second.dirty)
+        if (!m_testMap && entry.second.dirty)
         {
             MapState::SaveVisited(entry.first);
+        }
+    }
+    if (m_testMap)
+    {
+        for (const auto& entry : m_parked.islands)
+        {
+            if (entry.second.dirty)
+            {
+                MapState::SaveVisited(entry.first);
+            }
         }
     }
     m_scene.Destroy(m_root);
@@ -143,6 +154,12 @@ void World::RebuildQueue(const WorldPosition& player)
         for (int x = -m_radius - 1; x <= m_radius + 1; ++x)
         {
             const Key key = {player.chunkX + x, player.chunkZ + z};
+            if (m_testMap &&
+                (key.first < -2 || key.first > IslandTestMap::Columns * IslandTestMap::CellChunks - 1 ||
+                 key.second < -2 || key.second > IslandTestMap::Rows * IslandTestMap::CellChunks - 1))
+            {
+                continue;
+            }
             if (m_chunks.find(key) == m_chunks.end())
             {
                 pending.push_back(key);
@@ -154,6 +171,16 @@ void World::RebuildQueue(const WorldPosition& player)
         pending.end(),
         [&](Key a, Key b)
         {
+            if (m_testMap)
+            {
+                IslandKey ignored;
+                const bool islandA = IslandTestMap::KeyForChunk(a.first, a.second, ignored);
+                const bool islandB = IslandTestMap::KeyForChunk(b.first, b.second, ignored);
+                if (islandA != islandB)
+                {
+                    return islandA;
+                }
+            }
             const auto da = ChunkDistance(a, m_center), db = ChunkDistance(b, m_center);
             if (da != db)
             {
@@ -164,7 +191,8 @@ void World::RebuildQueue(const WorldPosition& player)
         });
     m_pending.assign(pending.begin(), pending.end());
     Diagnostics::Get().Event(
-        "world_window x=" + std::to_string(m_center.first) + " z=" + std::to_string(m_center.second) +
+        std::string("world_window mode=") + (m_testMap ? "test" : "adventure") +
+        " x=" + std::to_string(m_center.first) + " z=" + std::to_string(m_center.second) +
         " render_radius=" + std::to_string(m_radius) + " preload_radius=" + std::to_string(m_radius + 1) +
         " unload_radius=" + std::to_string(m_radius + 2));
 }
@@ -201,7 +229,8 @@ void World::Update(const WorldPosition& player, int radius)
         m_pending.pop_front();
         Generate(key);
         Diagnostics::Get().Event(
-            "chunk_generated x=" + std::to_string(key.first) + " z=" + std::to_string(key.second) +
+            std::string("chunk_generated mode=") + (m_testMap ? "test" : "adventure") +
+            " x=" + std::to_string(key.first) + " z=" + std::to_string(key.second) +
             " pending=" + std::to_string(m_pending.size()) + " cpu_ms=" +
             std::to_string(
                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count()));
@@ -216,7 +245,7 @@ void World::Update(const WorldPosition& player, int radius)
     }
     for (auto it = m_islands.begin(); it != m_islands.end();)
     {
-        if (!(it->first == IslandKey{0, 0}) && it->second.layout.use_count() == 1)
+        if (!m_testMap && !(it->first == IslandKey{0, 0}) && it->second.layout.use_count() == 1)
         {
             if (it->second.dirty && !MapState::SaveVisited(it->first))
             {
@@ -234,9 +263,9 @@ void World::Update(const WorldPosition& player, int radius)
     if (generating)
     {
         Diagnostics::Get().Event(
-            "world_stream loaded=" + std::to_string(m_chunks.size()) +
-            " active=" + std::to_string(VisibleChunks()) + " pending=" + std::to_string(m_pending.size()) +
-            " islands=" + std::to_string(m_islands.size()));
+            std::string("world_stream mode=") + (m_testMap ? "test" : "adventure") +
+            " loaded=" + std::to_string(m_chunks.size()) + " active=" + std::to_string(VisibleChunks()) +
+            " pending=" + std::to_string(m_pending.size()) + " islands=" + std::to_string(m_islands.size()));
     }
 }
 
@@ -244,36 +273,49 @@ void World::Generate(Key key)
 {
     const auto origin = Origin(key);
     IslandChunk chunk;
-    const auto sector = IslandGeneration::Sector(key.first, key.second);
-    for (int dz = -1; dz <= 1 && !chunk.island; ++dz)
+    if (m_testMap)
     {
-        for (int dx = -1; dx <= 1 && !chunk.island; ++dx)
+        IslandKey islandKey;
+        if (IslandTestMap::KeyForChunk(key.first, key.second, islandKey))
         {
-            const IslandKey islandKey = {sector.x + dx, sector.z + dz};
-            const auto descriptor = IslandGeneration::Describe(islandKey);
-            const auto relative = descriptor.center.RelativeTo(origin);
-            // Conservative bound contains land, houses and docks of every current shape.
-            if (relative.x < -MapCatalog::MaximumIslandSize || relative.z < -MapCatalog::MaximumIslandSize ||
-                relative.x > ChunkSize + MapCatalog::MaximumIslandSize ||
-                relative.z > ChunkSize + MapCatalog::MaximumIslandSize)
+            chunk.island = m_islands.at(islandKey).layout;
+        }
+    }
+    else
+    {
+        const auto sector = IslandGeneration::Sector(key.first, key.second);
+        for (int dz = -1; dz <= 1 && !chunk.island; ++dz)
+        {
+            for (int dx = -1; dx <= 1 && !chunk.island; ++dx)
             {
-                continue;
+                const IslandKey islandKey = {sector.x + dx, sector.z + dz};
+                const auto descriptor = IslandGeneration::Describe(islandKey);
+                const auto relative = descriptor.center.RelativeTo(origin);
+                // Conservative bound contains land, houses and docks of every current shape.
+                if (relative.x < -MapCatalog::MaximumIslandSize ||
+                    relative.z < -MapCatalog::MaximumIslandSize ||
+                    relative.x > ChunkSize + MapCatalog::MaximumIslandSize ||
+                    relative.z > ChunkSize + MapCatalog::MaximumIslandSize)
+                {
+                    continue;
+                }
+                auto found = m_islands.find(islandKey);
+                if (found == m_islands.end())
+                {
+                    auto layout = std::make_shared<IslandLayout>(descriptor);
+                    Diagnostics::Get().Event(
+                        "island_generated x=" + std::to_string(islandKey.x) +
+                        " z=" + std::to_string(islandKey.z) +
+                        " shape=" + std::to_string(static_cast<int>(descriptor.shape)) +
+                        " width=" + std::to_string(descriptor.width) +
+                        " village_ratio=" + std::to_string(layout->VillageArea() / layout->LandArea()));
+                    found =
+                        m_islands
+                            .emplace(islandKey, ResidentIsland{layout, MapState::Visited(islandKey), false})
+                            .first;
+                }
+                chunk.island = found->second.layout;
             }
-            auto found = m_islands.find(islandKey);
-            if (found == m_islands.end())
-            {
-                auto layout = std::make_shared<IslandLayout>(descriptor);
-                Diagnostics::Get().Event(
-                    "island_generated x=" + std::to_string(islandKey.x) +
-                    " z=" + std::to_string(islandKey.z) +
-                    " shape=" + std::to_string(static_cast<int>(descriptor.shape)) +
-                    " width=" + std::to_string(descriptor.width) +
-                    " village_ratio=" + std::to_string(layout->VillageArea() / layout->LandArea()));
-                found =
-                    m_islands.emplace(islandKey, ResidentIsland{layout, MapState::Visited(islandKey), false})
-                        .first;
-            }
-            chunk.island = found->second.layout;
         }
     }
     chunk.actor = m_scene.Create<Actor>(m_chunksRoot, "월드 청크").Id();
@@ -287,7 +329,8 @@ void World::Generate(Key key)
         {
             chunk.terrain = CachedMesh(
                 std::move(terrain),
-                "map_chunk_" + std::to_string(key.first) + "_" + std::to_string(key.second));
+                std::string(m_testMap ? "test_map_chunk_" : "map_chunk_") + std::to_string(key.first) + "_" +
+                    std::to_string(key.second));
             m_scene.Create<MeshActor>(chunk.actor, chunk.terrain, "청크 지형");
         }
         PlaceProps(chunk, origin);
@@ -360,6 +403,18 @@ bool World::IsActive(const WorldPosition& p) const
 
 bool World::ConservativeSea(const WorldPosition& p, float radius) const
 {
+    if (m_testMap)
+    {
+        for (const auto& entry : m_islands)
+        {
+            const auto d = entry.second.layout->Info().center.RelativeTo(p);
+            if (std::hypot(d.x, d.z) <= IslandTestMap::IslandWidth + radius)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
     const auto sector = IslandGeneration::Sector(p.chunkX, p.chunkZ);
     for (int z = -1; z <= 1; ++z)
     {
@@ -480,7 +535,7 @@ void World::Visit(const WorldPosition& p)
     if (!state.visited)
     {
         state.visited = true;
-        state.dirty = !MapState::SaveVisited(layout->Info().key);
+        state.dirty = !m_testMap && !MapState::SaveVisited(layout->Info().key);
     }
 }
 
@@ -492,6 +547,10 @@ bool World::WasVisited(IslandKey key) const
 
 WorldPosition World::StartSpawn() const
 {
+    if (m_testMap)
+    {
+        return TestSpawn(0);
+    }
     auto p = m_start->Info().center;
     const auto q = m_start->Spawn();
     p.Move(q.x, q.z);
@@ -560,6 +619,14 @@ TownInteraction World::ServiceAt(const WorldPosition& player) const
 
 WorldPosition World::StartVillage() const
 {
+    if (m_testMap)
+    {
+        const auto& layout = *m_islands.at({0, 0}).layout;
+        auto p = layout.Info().center;
+        const auto q = layout.VillageCenter();
+        p.Move(q.x, q.z);
+        return p;
+    }
     auto p = m_start->Info().center;
     const auto q = m_start->VillageCenter();
     p.Move(q.x, q.z);

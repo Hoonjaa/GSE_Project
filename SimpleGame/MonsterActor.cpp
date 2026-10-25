@@ -274,7 +274,7 @@ void MonsterActor::Render(Renderer& r, const ActorTransform& world) const
 
 void MonsterActor::Overlay(Renderer& r, const ActorTransform& world) const
 {
-    if (health <= 0)
+    if (health <= 0 || !showStatus)
     {
         return;
     }

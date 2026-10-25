@@ -15,6 +15,7 @@ void Prototype::RenderHud(Renderer& r)
 {
     if (m_hud && !PlayerPanelOpen())
     {
+        const bool overview = m_world.IsTestMap() && m_testOverview;
         const float W = static_cast<float>(r.Width()), H = static_cast<float>(r.Height());
         const float font = W < 950 ? 1.5f : 2.f;
         r.Panel(20, 20, 330, 88, Ink);
@@ -22,7 +23,7 @@ void Prototype::RenderHud(Renderer& r)
         r.Text(38, 30, KoreanText::Title, Paper, 3);
         r.Text(38, 65, KoreanText::Subtitle, Gold, 1.7f);
         r.Text(38, 86, KoreanText::Version, Paper, 1.5f);
-        if (m_postHud)
+        if (m_postHud && !overview)
         {
             r.Panel(20, 118, 420, 107, Ink);
             std::ostringstream postStatus;
@@ -46,7 +47,7 @@ void Prototype::RenderHud(Renderer& r)
         }
 
         // The chart shows loaded geography, not permanent discoveries.
-        if (W > 760)
+        if (W > 760 && !m_world.IsTestMap())
         {
             const float left = W - 192, top = 20, chart = 160;
             r.Panel(left, top, 172, 200, Ink);
@@ -65,56 +66,63 @@ void Prototype::RenderHud(Renderer& r)
             }
             r.Text(left + 145, top + 37, KoreanText::North, Gold, 1.5f);
         }
-        if (const auto* island = m_world.CurrentIsland(ActivePosition()))
+        if (m_world.IsTestMap())
         {
-            const auto relative = ActivePosition().RelativeTo(island->Info().center);
-            const auto& entry = MapCatalog::Island(island->Info().shape);
-            r.Panel(20, 265, 430, 86, Ink);
-            r.Text(32, 270, std::string(entry.name) + " / 항구 마을", Gold, 1.6f);
-            std::string goods = "특산품: ";
-            for (size_t i = 0; i < entry.specialties.size(); ++i)
+            RenderTestMapChart(r);
+        }
+        if (!overview)
+        {
+            if (const auto* island = m_world.CurrentIsland(ActivePosition()))
             {
-                if (i)
+                const auto relative = ActivePosition().RelativeTo(island->Info().center);
+                const auto& entry = MapCatalog::Island(island->Info().shape);
+                r.Panel(20, 265, 430, 86, Ink);
+                r.Text(32, 270, std::string(entry.name) + " / 항구 마을", Gold, 1.6f);
+                std::string goods = "특산품: ";
+                for (size_t i = 0; i < entry.specialties.size(); ++i)
                 {
-                    goods += " · ";
+                    if (i)
+                    {
+                        goods += " · ";
+                    }
+                    goods += MapCatalog::GoodName(entry.specialties[i]);
                 }
-                goods += MapCatalog::GoodName(entry.specialties[i]);
+                r.Text(32, 294, goods, Paper, 1.35f, 402);
+                r.Text(
+                    32,
+                    327,
+                    island->Village(relative.x, relative.z)
+                        ? "마을 안전 구역 / 산호 전리품 매입 5·20골드 / 특산품 무역 준비 중"
+                        : "마을 밖 탐험 구역",
+                    Paper,
+                    1.3f);
             }
-            r.Text(32, 294, goods, Paper, 1.35f, 402);
+            r.Panel(20, 360, 430, 84, Ink);
+            r.Text(32, 365, "보유 골드: " + std::to_string(m_economy.Gold()), Gold, 1.6f);
             r.Text(
                 32,
-                327,
-                island->Village(relative.x, relative.z)
-                    ? "마을 안전 구역 / 산호 전리품 매입 5·20골드 / 특산품 무역 준비 중"
-                    : "마을 밖 탐험 구역",
+                389,
+                "전리품: 일반 " + std::to_string(m_economy.LootCount(CoralLoot::Normal)) + " / 보스 " +
+                    std::to_string(m_economy.LootCount(CoralLoot::Boss)),
                 Paper,
-                1.3f);
+                1.4f,
+                402);
+            const auto facility = m_world.ServiceAt(Player().location);
+            const std::string shipInfo = m_economy.HasShip()
+                                             ? ("8m 돛단배 · 동료 정원 1명 · 적재 " +
+                                                std::to_string(m_economy.UsedCargoKinds()) + "/5종")
+                                             : "배 미소유 · 조선소에서 50골드로 구매";
+            r.Text(
+                32,
+                414,
+                facility.kind == TownServiceKind::None
+                    ? shipInfo
+                    : (facility.kind == TownServiceKind::Shop ? "[E] 상점 이용" : "[E] 조선소 이용"),
+                Paper,
+                1.3f,
+                402);
+            RenderPlayerStatus(r);
         }
-        r.Panel(20, 360, 430, 84, Ink);
-        r.Text(32, 365, "보유 골드: " + std::to_string(m_economy.Gold()), Gold, 1.6f);
-        r.Text(
-            32,
-            389,
-            "전리품: 일반 " + std::to_string(m_economy.LootCount(CoralLoot::Normal)) + " / 보스 " +
-                std::to_string(m_economy.LootCount(CoralLoot::Boss)),
-            Paper,
-            1.4f,
-            402);
-        const auto facility = m_world.ServiceAt(Player().location);
-        const std::string shipInfo =
-            m_economy.HasShip()
-                ? ("8m 돛단배 · 동료 정원 1명 · 적재 " + std::to_string(m_economy.UsedCargoKinds()) + "/5종")
-                : "배 미소유 · 조선소에서 50골드로 구매";
-        r.Text(
-            32,
-            414,
-            facility.kind == TownServiceKind::None
-                ? shipInfo
-                : (facility.kind == TownServiceKind::Shop ? "[E] 상점 이용" : "[E] 조선소 이용"),
-            Paper,
-            1.3f,
-            402);
-        RenderPlayerStatus(r);
         const auto active = ActivePosition();
         std::ostringstream status;
         status << (m_playerMode == PlayerMode::PirateDeck

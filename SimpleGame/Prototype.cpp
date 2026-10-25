@@ -2,6 +2,7 @@
 #include "Prototype.h"
 #include "KoreanText.h"
 #include "Diagnostics.h"
+#include "IslandTestMap.h"
 #include <cmath>
 #include <sstream>
 #include <iomanip>
@@ -82,6 +83,21 @@ void Prototype::Key(unsigned char key, bool down)
     const bool pressed = down && !m_keys[key];
     m_keys[key] = down;
     if (!pressed)
+    {
+        return;
+    }
+    if (key == 't')
+    {
+        ToggleTestMap();
+        return;
+    }
+    if (key == 'y' && m_world.IsTestMap())
+    {
+        ToggleTestOverview();
+        return;
+    }
+    if (m_testOverview && m_world.IsTestMap() &&
+        (key == 'e' || key == 'f' || key == 'i' || key == 'o' || key == 'p'))
     {
         return;
     }
@@ -176,12 +192,24 @@ void Prototype::Key(unsigned char key, bool down)
 
 void Prototype::Zoom(int direction)
 {
+    if (m_world.IsTestMap() && m_testOverview)
+    {
+        return;
+    }
     m_zoom = (std::max)(16.f, (std::min)(48.f, m_zoom + direction * 2.f));
 }
 
 void Prototype::MouseAttack(int x, int y, const Renderer& renderer)
 {
+    if (m_world.IsTestMap() && m_testOverview)
+    {
+        return;
+    }
     if (PlayerPanelOpen())
+    {
+        return;
+    }
+    if (m_hud && m_world.IsTestMap() && x >= (std::max)(20, renderer.Width() - 370) && y < 205)
     {
         return;
     }
@@ -298,6 +326,19 @@ void Prototype::Move(double dx, double dz)
 
 void Prototype::Update(double dt, int width, int height)
 {
+    m_viewWidth = width;
+    m_viewHeight = height;
+    const bool overview = m_world.IsTestMap() && m_testOverview;
+    if (overview)
+    {
+        const float span = (IslandTestMap::Columns + IslandTestMap::Rows - 2) * IslandTestMap::Spacing +
+                           2 * IslandTestMap::IslandWidth;
+        const float fit = (std::min)(
+            (std::max)(100, width - 80) / (span * .70710678f),
+            (std::max)(100, height - 220) / (span * .40824829f + 10));
+        m_zoom = (std::max)(.5f, (std::min)(6.f, fit * .92f));
+        m_camera = IslandTestMap::Center();
+    }
     if (dt > 0)
     {
         m_frameAverage += (dt - m_frameAverage) * .05;
@@ -307,7 +348,7 @@ void Prototype::Update(double dt, int width, int height)
     m_messageTime = (std::max)(0.f, m_messageTime - static_cast<float>(dt));
     // Covers the inverse isometric viewport, with a margin for scenery and camera lag.
     const int radius = static_cast<int>(std::ceil((width * .354 + height * .613) / (m_zoom * ChunkSize))) + 1;
-    m_world.Update(ActivePosition(), radius);
+    m_world.Update(overview ? IslandTestMap::Center() : ActivePosition(), radius);
     m_levelOne.SetActive(true);
     m_levelOne.SetActiveRegion(
         [this](Vec3 position)
@@ -319,7 +360,7 @@ void Prototype::Update(double dt, int width, int height)
         });
     double horizontal = (m_keys['d'] ? 1.0 : 0) - (m_keys['a'] ? 1.0 : 0);
     double vertical = (m_keys['s'] ? 1.0 : 0) - (m_keys['w'] ? 1.0 : 0);
-    if (PlayerPanelOpen() || (Aboard() && m_marine->Captured()))
+    if (overview || PlayerPanelOpen() || (Aboard() && m_marine->Captured()))
     {
         horizontal = vertical = 0;
     }
@@ -366,12 +407,17 @@ void Prototype::Update(double dt, int width, int height)
     const auto islandLocal =
         playerIsland ? Player().location.RelativeTo(playerIsland->Info().center) : Vec3{};
     const bool village = playerIsland && playerIsland->Village(islandLocal.x, islandLocal.z);
-    m_levelOne.BeginFrame(static_cast<float>(dt), Player().location.RelativeTo(origin), Aboard(), village);
+    m_levelOne.BeginFrame(
+        overview ? 0 : static_cast<float>(dt),
+        Player().location.RelativeTo(origin),
+        Aboard(),
+        village);
     RaidPlayer raidPlayer;
     raidPlayer.deck = m_deckPosition;
     raidPlayer.ownDeck = m_playerMode == PlayerMode::Deck || Sailing();
     const bool captured = m_marine->Captured();
-    if (m_marine->Update(static_cast<float>(dt), ShipActor().location, Aboard(), m_shipHeading, raidPlayer))
+    if (!overview &&
+        m_marine->Update(static_cast<float>(dt), ShipActor().location, Aboard(), m_shipHeading, raidPlayer))
     {
         const auto notice = m_marine->Notice();
         if (m_marine->Raid().Failed())
@@ -390,11 +436,15 @@ void Prototype::Update(double dt, int width, int height)
         m_fishing = false;
         ClearInput();
     }
-    UpdateFishing(static_cast<float>(dt));
+    if (!overview)
+    {
+        UpdateFishing(static_cast<float>(dt));
+    }
 
     SyncBoardedPlayer();
-    m_monsters->Update(static_cast<float>(dt), Player().location, !Aboard() && m_levelOne.Health() > 0);
-    m_scene.Update(static_cast<float>(dt));
+    m_monsters
+        ->Update(static_cast<float>(dt), Player().location, !Aboard() && m_levelOne.Health() > 0, overview);
+    m_scene.Update(overview ? 0 : static_cast<float>(dt));
     if (m_levelOne.EndFrame())
     {
         Reset();
@@ -402,14 +452,18 @@ void Prototype::Update(double dt, int width, int height)
     const auto active = ActivePosition();
     const Vec3 distance = active.RelativeTo(m_camera);
     const double follow = 1 - std::exp(-8 * dt);
-    m_camera.Move(distance.x * follow, distance.z * follow);
+    if (!overview)
+    {
+        m_camera.Move(distance.x * follow, distance.z * follow);
+    }
 }
 
 void Prototype::Render(Renderer& r)
 {
     PrepareActors();
     m_marine->Prepare(m_camera, ShipActor().location);
-    m_monsters->Prepare(m_camera);
+    const bool overview = m_world.IsTestMap() && m_testOverview;
+    m_monsters->Prepare(m_camera, !overview);
     r.SetSceneLight(m_marine->Light());
     r.SetPostProcessing(m_postSettings);
     r.Begin(m_zoom);
@@ -417,7 +471,7 @@ void Prototype::Render(Renderer& r)
     WorldPosition origin;
     origin.x = 0;
     origin.z = 0;
-    m_levelOne.Prepare(origin.RelativeTo(m_camera), m_hud && !m_postHud && !PlayerPanelOpen());
+    m_levelOne.Prepare(origin.RelativeTo(m_camera), m_hud && !m_postHud && !PlayerPanelOpen() && !overview);
     m_scene.Render(r);
     r.BeginOverlay();
     m_scene.Overlay(r);

@@ -157,6 +157,7 @@
     <Text Include="..\doc\PIRATE_BOARDING_REPORT.md" />
     <Text Include="..\doc\monster.md" />
     <Text Include="..\doc\MONSTER_IMPLEMENTATION_REPORT.md" />
+    <Text Include="..\doc\ISLAND_TEST_MAP_README.md" />
     <Text Include="..\doc\map.md" />
     <Text Include="..\doc\MAP_IMPLEMENTATION_REPORT.md" />
     <Text Include="..\doc\TOWN_SERVICES_README.md" />
@@ -190,6 +191,7 @@
     <ClInclude Include="MonsterCatalog.h" />
     <ClInclude Include="MonsterActor.h" />
     <ClInclude Include="MonsterSystem.h" />
+    <ClInclude Include="IslandTestMap.h" />
     <ClInclude Include="Prototype.h" />
     <ClInclude Include="KoreanText.h" />
     <ClInclude Include="PostProcessing.h" />
@@ -229,6 +231,10 @@
     <ClCompile Include="MonsterMeshes.cpp" />
     <ClCompile Include="MonsterActor.cpp" />
     <ClCompile Include="MonsterSystem.cpp" />
+    <ClCompile Include="IslandTestMap.cpp" />
+    <ClCompile Include="WorldTestMap.cpp" />
+    <ClCompile Include="PrototypeTestMap.cpp" />
+    <ClCompile Include="PlayerProgressState.cpp" />
     <ClCompile Include="PrototypePlayer.cpp" />
     <ClCompile Include="PrototypePlayerHud.cpp" />
     <ClCompile Include="Prototype.cpp" />

@@ -13,8 +13,9 @@ public:
         std::function<void(int)> hitPlayer,
         std::function<void(bool)> defeated);
     ~MonsterSystem();
-    void Update(float dt, const WorldPosition& player, bool onLand);
-    void Prepare(const WorldPosition& camera);
+    void Update(float dt, const WorldPosition& player, bool onLand, bool paused = false);
+    void SetActive(bool active);
+    void Prepare(const WorldPosition& camera, bool showStatus = true);
     void Attack(const WorldPosition& player, Vec3 aim, int damage);
 
 private:

@@ -295,6 +295,6 @@ void Prototype::PrepareActors()
 
     auto* harbor = m_scene.Get<WorldActor>(m_harbor);
     harbor->Prepare(m_camera);
-    harbor->visible = m_world.IsActive(harbor->location);
+    harbor->visible = !m_world.IsTestMap() && m_world.IsActive(harbor->location);
     harbor->enabled = harbor->visible;
 }

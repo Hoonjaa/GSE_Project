@@ -178,6 +178,11 @@ SeaWeatherActor::~SeaWeatherActor()
     PlaySoundW(nullptr, nullptr, 0);
 }
 
+void SeaWeatherActor::StopAudio()
+{
+    PlaySoundW(nullptr, nullptr, 0);
+}
+
 void SeaWeatherActor::SetStorm(bool storm)
 {
     if (storm != m_storm)

@@ -23,6 +23,7 @@
     <Text Include="..\doc\PIRATE_BOARDING_REPORT.md" />
     <Text Include="..\doc\monster.md" />
     <Text Include="..\doc\MONSTER_IMPLEMENTATION_REPORT.md" />
+    <Text Include="..\doc\ISLAND_TEST_MAP_README.md" />
     <Text Include="..\doc\map.md" />
     <Text Include="..\doc\MAP_IMPLEMENTATION_REPORT.md" />
     <Text Include="..\doc\TOWN_SERVICES_README.md" />
@@ -103,6 +104,9 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="MonsterSystem.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="IslandTestMap.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="Prototype.h">
@@ -216,6 +220,18 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="MonsterSystem.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="IslandTestMap.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="WorldTestMap.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="PrototypeTestMap.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="PlayerProgressState.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="PrototypePlayer.cpp">
