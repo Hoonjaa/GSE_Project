@@ -124,8 +124,16 @@ public:
         float animationTime);
     void BeginOverlay();
     void Panel(float x, float y, float width, float height, Color color);
-    // UTF-8 input; maxWidth > 0 enables character wrapping for dialogue panels.
-    void Text(float x, float y, const std::string& text, Color color, float scale = 2, float maxWidth = 0);
+    void Icon(const Mesh& unitMesh, float x, float y, float width, float height, Color tint = {1, 1, 1});
+    // UTF-8 input; maxWidth enables wrapping, maxHeight bounds the text block (0 = viewport).
+    void Text(
+        float x,
+        float y,
+        const std::string& text,
+        Color color,
+        float scale = 2,
+        float maxWidth = 0,
+        float maxHeight = 0);
     void End();
 
     int Width() const

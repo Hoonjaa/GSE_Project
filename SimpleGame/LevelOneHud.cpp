@@ -26,12 +26,12 @@ void LevelOne::Overlay(Renderer& renderer) const
         34,
         164,
         "경험치 " + std::to_string(m_xp) + "/" + std::to_string(required) + " / 강화석 " +
-            std::to_string(m_stones),
+            std::to_string(m_economy.ItemCount(InventoryItem::UpgradeStone)),
         Gold,
         1.6f);
+    const int weapon = m_economy.Equipped(EquipSlot::Weapon);
     const std::string weaponName =
-        m_weapon >= 18 ? "산호 대검"
-                       : (m_weapon >= 8 ? "해적 커틀러스" : (m_weapon > 0 ? "선원 단검" : "훈련용 검"));
+        weapon < 0 ? "맨손" : ItemCatalog::Get(static_cast<InventoryItem>(weapon)).name;
     renderer.Text(
         34,
         189,
@@ -42,7 +42,7 @@ void LevelOne::Overlay(Renderer& renderer) const
         34,
         214,
         !m_economy.HasShip() ? "몬스터 확인용 50골드 · 조선소에서 돛단배 구매"
-                             : "섬마다 일반 4종·에픽 1종 / 아이템 드랍 비활성",
+                             : "섬마다 일반 4종·에픽 1종 / 전리품·장비 자동 습득",
         Gold,
         1.5f);
     renderer.Text(34, 234, "좌클릭 근접 공격 / 붉은 원에서 벗어나세요", Paper, 1.4f);

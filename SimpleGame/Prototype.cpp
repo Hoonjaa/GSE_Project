@@ -38,10 +38,16 @@ Prototype::Prototype() : m_world(m_scene), m_levelOne(m_scene, m_world.Tutorial(
         {
             m_levelOne.TakeDamage(damage);
         },
-        [this](bool epic)
+        [this](IslandKey island, bool epic)
         {
             m_levelOne.RewardMonster(epic);
+            m_economy.RecordMonsterKill(island, epic);
+        },
+        [this](InventoryItem item)
+        {
+            return m_economy.CollectItem(item);
         }));
+    m_npcs.reset(new NpcSystem(m_scene, m_world, m_economy));
     Reset();
 }
 
@@ -97,7 +103,7 @@ void Prototype::Key(unsigned char key, bool down)
         return;
     }
     if (m_testOverview && m_world.IsTestMap() &&
-        (key == 'e' || key == 'f' || key == 'i' || key == 'o' || key == 'p'))
+        (key == 'e' || key == 'f' || key == 'i' || key == 'k' || key == 'o' || key == 'p'))
     {
         return;
     }
@@ -114,6 +120,21 @@ void Prototype::Key(unsigned char key, bool down)
         {
             ClearInput();
         }
+        return;
+    }
+    if (key == 'i')
+    {
+        ToggleInventory();
+        return;
+    }
+    if (m_inventoryOpen)
+    {
+        InventoryKey(key);
+        return;
+    }
+    if (m_talk.valid)
+    {
+        NpcKeyInput(key);
         return;
     }
     if (m_cargoOpen)
@@ -140,7 +161,7 @@ void Prototype::Key(unsigned char key, bool down)
         case 'r':
             Reset();
             break;
-        case 'i':
+        case 'k':
             ToggleCargo();
             break;
         case 'f':
@@ -207,6 +228,7 @@ void Prototype::MouseAttack(int x, int y, const Renderer& renderer)
     }
     if (PlayerPanelOpen())
     {
+        PanelClick(x, y);
         return;
     }
     if (m_hud && m_world.IsTestMap() && x >= (std::max)(20, renderer.Width() - 370) && y < 205)
@@ -277,6 +299,16 @@ void Prototype::Interact()
     {
         ClearInput();
         m_serviceMessage.clear();
+        m_marketSelection = 0;
+        m_buying = true;
+        return;
+    }
+    m_talk = m_npcs->Nearby(Player().location);
+    if (m_talk.valid)
+    {
+        m_npcs->Open(m_talk);
+        m_serviceMessage.clear();
+        ClearInput();
         return;
     }
     BoardShip();
@@ -444,6 +476,13 @@ void Prototype::Update(double dt, int width, int height)
     SyncBoardedPlayer();
     m_monsters
         ->Update(static_cast<float>(dt), Player().location, !Aboard() && m_levelOne.Health() > 0, overview);
+    m_npcs->Update(
+        static_cast<float>(dt),
+        Player().location,
+        Aboard(),
+        ShipActor().location,
+        Aboard() ? m_shipHeading : m_heading,
+        overview);
     m_scene.Update(overview ? 0 : static_cast<float>(dt));
     if (m_levelOne.EndFrame())
     {
@@ -463,7 +502,8 @@ void Prototype::Render(Renderer& r)
     PrepareActors();
     m_marine->Prepare(m_camera, ShipActor().location);
     const bool overview = m_world.IsTestMap() && m_testOverview;
-    m_monsters->Prepare(m_camera, !overview);
+    m_monsters->Prepare(m_camera, !overview && !PlayerPanelOpen());
+    m_npcs->Prepare(m_camera, !overview && !PlayerPanelOpen());
     r.SetSceneLight(m_marine->Light());
     r.SetPostProcessing(m_postSettings);
     r.Begin(m_zoom);
@@ -475,5 +515,7 @@ void Prototype::Render(Renderer& r)
     m_scene.Render(r);
     r.BeginOverlay();
     m_scene.Overlay(r);
+    // Modal windows cover all world nameplates, including streamed actors created later.
+    m_uiScene.Overlay(r);
     r.End();
 }

@@ -235,13 +235,6 @@ void Prototype::CreateActors()
     auto& harbor = m_scene.Create<WorldActor>(m_actorsRoot, "항구 주민 및 장식");
     m_harbor = harbor.Id();
     harbor.location = m_world.StartVillage();
-    const CachedMesh npc(Character({.77f, .34f, .22f}), "harbor_npc");
-    auto& first = m_scene.Create<MeshActor>(m_harbor, npc, "항구 주민");
-    first.transform.position = {0, .57f, 0};
-    first.transform.rotation = .6f;
-    auto& second = m_scene.Create<MeshActor>(m_harbor, npc, "항구 주민");
-    second.transform.position = {-5, .57f, .1f};
-    second.transform.rotation = -.8f;
     auto& flag = m_scene.Create<FlagActor>(m_harbor);
     flag.transform.position = {2.8f, 0, -.3f};
     for (int i = 0; i < 3; ++i)
@@ -249,7 +242,7 @@ void Prototype::CreateActors()
         auto& gull = m_scene.Create<GullActor>(m_harbor, i);
         gull.Update(0);
     }
-    auto& hud = m_scene.Create<CallbackActor>(m_actorsRoot, "게임 HUD");
+    auto& hud = m_uiScene.Create<CallbackActor>(NoActor, "게임 HUD");
     hud.overlay = [this](Renderer& renderer, const ActorTransform&)
     {
         RenderHud(renderer);

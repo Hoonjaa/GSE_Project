@@ -4,19 +4,15 @@
 #include <cstdint>
 #include <random>
 #include <string>
+#include <map>
+#include <vector>
+#include "ItemCatalog.h"
+#include "NpcData.h"
 
 enum class CoralLoot
 {
     Normal,
     Boss
-};
-enum class InventoryItem : unsigned
-{
-    NormalCoral,
-    BossCoral,
-    Fish,
-    Tentacle,
-    TradeBase
 };
 
 namespace EconomyRules
@@ -24,7 +20,7 @@ namespace EconomyRules
     constexpr std::int64_t SailboatPrice = 50;
     constexpr std::int64_t InitialGold = 50; // Temporary monster preview funds, approved by the user.
     constexpr float SailboatLength = 8;
-    constexpr size_t CompanionCapacity = 1, CargoKinds = 5, ItemCount = 36;
+    constexpr size_t CompanionCapacity = 2, CargoKinds = 5, ItemCount = ItemCatalog::Count;
     InventoryItem CoralItem(CoralLoot kind);
     const char* ItemName(InventoryItem item);
     std::int64_t ItemPrice(InventoryItem item);
@@ -66,8 +62,32 @@ public:
     std::int64_t ItemCount(InventoryItem item) const;
     bool Collect(CoralLoot kind);
     bool CollectItem(InventoryItem item);
+    bool CollectItems(InventoryItem item, std::int64_t count);
+    bool ConsumeItems(InventoryItem item, std::int64_t count);
+    EconomyResult BuyItem(InventoryItem item, std::int64_t price);
+    EconomyResult SellItem(InventoryItem item, std::int64_t price);
+    EconomyResult Equip(InventoryItem item);
+    EconomyResult Unequip(EquipSlot slot);
+    int Equipped(EquipSlot slot) const;
+    int EquipmentAttack() const;
+    int EquipmentDefence() const;
+    int EquipmentHealth() const;
+    NpcRecord& Npc(const NpcKey& key);
+    const NpcRecord& Npc(const NpcKey& key) const;
+    void AdjustAffinity(const NpcKey& key, int amount, const std::string& reason);
+    EconomyResult AcceptQuest(const NpcKey& key);
+    EconomyResult CompleteQuest(const NpcKey& key, IslandShape shape);
+    void RecordMonsterKill(IslandKey island, bool epic);
+    void RecordTradePurchase(IslandKey island);
+    EconomyResult Recruit(const NpcKey& key);
+    EconomyResult Dismiss(const NpcKey& key);
+
+    const std::vector<NpcKey>& Companions() const
+    {
+        return m_companions;
+    }
+
     EconomyResult CollectPirateLoot(int gold, int tentacles);
-    EconomyResult SellAll();
     EconomyResult BuySailboat();
     EconomyResult Store(CoralLoot kind);
     EconomyResult Unload(CoralLoot kind);
@@ -88,4 +108,7 @@ private:
     std::int64_t m_gold = EconomyRules::InitialGold;
     bool m_hasShip = false;
     std::array<CargoSlot, EconomyRules::CargoKinds> m_cargo = {};
+    std::array<int, 4> m_equipment = {{static_cast<int>(InventoryItem::TrainingSword), -1, -1, -1}};
+    std::map<NpcKey, NpcRecord> m_npcs;
+    std::vector<NpcKey> m_companions;
 };

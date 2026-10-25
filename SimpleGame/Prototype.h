@@ -5,6 +5,7 @@
 #include "ShipDeck.h"
 #include "MarineSystem.h"
 #include "MonsterSystem.h"
+#include "NpcSystem.h"
 #include <array>
 #include <string>
 
@@ -24,7 +25,7 @@ public:
 
     size_t ActorCount() const
     {
-        return m_scene.Size();
+        return m_scene.Size() + m_uiScene.Size();
     }
 
     size_t LoadedChunkCount() const
@@ -70,6 +71,18 @@ private:
     void CaptureTravelState();
     void RestoreTravelState();
     void RenderPlayerPanel(Renderer& renderer) const;
+    void ToggleInventory();
+    void InventoryKey(unsigned char key);
+    void RenderInventory(Renderer& renderer) const;
+    bool PanelClick(int x, int y);
+    std::vector<InventoryItem> BagItems() const;
+    std::vector<InventoryItem> CargoItems() const;
+    void NpcKeyInput(unsigned char key);
+    void RenderNpc(Renderer& renderer) const;
+    void TradeKey(unsigned char key);
+    void RenderTrade(Renderer& renderer) const;
+    std::vector<InventoryItem> MarketItems() const;
+    IslandShape MarketShape() const;
     void RenderPlayerStatus(Renderer& renderer) const;
 
     bool Aboard() const
@@ -84,7 +97,7 @@ private:
 
     bool PlayerPanelOpen() const
     {
-        return m_cargoOpen || m_service.kind != TownServiceKind::None;
+        return m_inventoryOpen || m_talk.valid || m_cargoOpen || m_service.kind != TownServiceKind::None;
     }
 
     WorldPosition ActivePosition() const
@@ -93,6 +106,7 @@ private:
     }
 
     SceneGraph m_scene;
+    SceneGraph m_uiScene;
     World m_world;
     PlayerEconomy m_economy;
     LevelOne m_levelOne;
@@ -100,6 +114,11 @@ private:
     std::unique_ptr<MonsterSystem> m_monsters;
     std::unique_ptr<MarineSystem> m_parkedMarine;
     std::unique_ptr<MonsterSystem> m_parkedMonsters;
+    std::unique_ptr<NpcSystem> m_npcs, m_parkedNpcs;
+    NpcSelection m_talk;
+    InventoryIcons m_icons;
+    bool m_inventoryOpen = false, m_buying = true;
+    unsigned m_inventorySelection = 0, m_marketSelection = 0;
 
     struct TravelState
     {

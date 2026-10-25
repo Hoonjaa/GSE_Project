@@ -152,6 +152,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <Text Include="..\doc\NPC.md" />
+    <Text Include="..\doc\NPC_INVENTORY_IMPLEMENTATION_REPORT.md" />
     <Text Include="..\doc\player.md" />
     <Text Include="..\doc\PLAYER_IMPLEMENTATION_REPORT.md" />
     <Text Include="..\doc\PIRATE_BOARDING_REPORT.md" />
@@ -168,6 +170,12 @@
     <Text Include="..\doc\PERFORMANCE_ANALYSIS_LOG.md" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ItemCatalog.h" />
+    <ClInclude Include="NpcData.h" />
+    <ClInclude Include="TradeRules.h" />
+    <ClInclude Include="NpcDialogue.h" />
+    <ClInclude Include="NpcSystem.h" />
+    <ClInclude Include="MonsterItemDrop.h" />
     <ClInclude Include="Actor.h" />
     <ClInclude Include="SceneGraph.h" />
     <ClInclude Include="GameplayActors.h" />
@@ -201,6 +209,18 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="ItemCatalog.cpp" />
+    <ClCompile Include="InventoryEquipment.cpp" />
+    <ClCompile Include="InventoryIcons.cpp" />
+    <ClCompile Include="RendererIcon.cpp" />
+    <ClCompile Include="NpcRelations.cpp" />
+    <ClCompile Include="TradeRules.cpp" />
+    <ClCompile Include="NpcDialogue.cpp" />
+    <ClCompile Include="NpcSystem.cpp" />
+    <ClCompile Include="MonsterItemDrop.cpp" />
+    <ClCompile Include="PrototypeInventory.cpp" />
+    <ClCompile Include="PrototypeNpc.cpp" />
+    <ClCompile Include="PrototypeTrade.cpp" />
     <ClCompile Include="Actor.cpp" />
     <ClCompile Include="SceneGraph.cpp" />
     <ClCompile Include="GameplayActors.cpp" />

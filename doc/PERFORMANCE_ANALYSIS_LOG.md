@@ -114,6 +114,16 @@
 - 비교: 첫 전체 보기와 준비 완료 후 CPU/정적 업로드/instances, T 반복 시 Actor·청크·상주 자산 수 안정 여부, 비활성 월드의 draw/AI 제외.
 - 확인 범위: 정적 점검. 빌드·실행 및 FPS/메모리/화면 수치 미측정. 상세: ISLAND_TEST_MAP_README.md.
 
+## 2026-10-25 NPC · 거래 · 인벤토리 · 드랍
+
+- 범위: 섬별 NPC 3명과 초기 동료 2명, 86종 아이템, 4×4 인벤토리/4부위 장비, 특산품 거래·호감도, 육상 드랍/크라켄 보상 재활성화.
+- 공유 모델: NPC 3종 및 드랍 3종을 파일 캐시/기존 GPU 인스턴스 배치에 등록. 아이콘 9종·모서리 4종은 단위 메시를 한 번 생성하고 기존 UI 스트림으로 전송. 개별 칸마다 glDraw를 호출하지 않음.
+- AI 비용: 동료 경로장은 현재 섬 하나에서 공유, 셀 이동 시 최대 0.25초 간격 갱신. 동료 미보유·승선 중 생성 제외. NPC 관계 변경은 사건 중심. 외부 대화 제공자는 미연결이며 연결 시 비동기 대기 최대 2개, 렌더 루프 비차단 폴링.
+- 수명: 로딩된 섬의 NPC/바닥 드랍만 Actor로 보유. 동료 경로장 레이아웃은 weak_ptr로 저장해 원거리 섬 해제를 방해하지 않음. 바닥 드랍 섬당 128개 상한·활성 120초 수명, 초과 시 직접 지급.
+- 추적 이벤트: monster_drop_roll(species/item/chance/roll/hit), item_collected, market_buy/sell, equipment_changed/removed, npc_relation, npc_village_created. 세션의 기존 FPS/Draw Call/static·instance·stream 업로드 로그와 비교.
+- 측정: 빌드·게임 실행·화면 확인은 사용자 담당. 이번 수치는 설계 상한이며 FPS/메모리 개선 결과를 측정한 것은 아님. 비교 권장: 빈 가방/16칸/다음 페이지, NPC 대화/영입, 처치·드랍 다수, T 왕복과 원거리 청크 해제.
+- 상세 및 사용자 확인 절차: NPC_INVENTORY_IMPLEMENTATION_REPORT.md.
+
 ## 다음 분석 기록 형식
 
 - 날짜 / 변경 내용 / 실행 세션 폴더:

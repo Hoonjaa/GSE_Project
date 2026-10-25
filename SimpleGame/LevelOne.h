@@ -27,6 +27,7 @@ public:
     bool Attack(Vec3 player, Vec3 aim, bool sailing);
     void RewardMonster(bool epic);
     void Upgrade();
+    void EquipmentChanged();
     void Recover();
 
     void TakeDamage(int damage)
@@ -49,12 +50,13 @@ public:
 
     int Damage() const
     {
-        return 10 + (m_level - 1) * 3 + m_weapon + m_upgrade * 2;
+        return m_economy.EquipmentAttack() + 10 + (m_level - 1) * 3 + m_weapon +
+               (m_economy.Equipped(EquipSlot::Weapon) >= 0 ? m_upgrade * 2 : 0);
     }
 
     int MaxHealth() const
     {
-        return 100 + (m_level - 1) * 18;
+        return m_economy.EquipmentHealth() + 100 + (m_level - 1) * 18;
     }
 
     bool Attacking() const;

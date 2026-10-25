@@ -23,7 +23,7 @@ LevelOne::LevelOne(SceneGraph& scene, const LevelOneTerrain& terrain, PlayerEcon
     {
         Overlay(renderer);
     };
-    Notify("섬별 몬스터 미리보기 · 일반 4종과 에픽 1종 / 아이템 드랍 비활성");
+    Notify("섬별 몬스터 미리보기 · 일반 4종과 에픽 1종 / 전리품·장비 자동 습득");
 }
 
 void LevelOne::Notify(const std::string& text)
@@ -43,18 +43,23 @@ void LevelOne::Recover()
 
 void LevelOne::Upgrade()
 {
+    if (m_economy.Equipped(EquipSlot::Weapon) < 0)
+    {
+        Notify("무기를 착용한 뒤 강화하세요.");
+        return;
+    }
     const int cost = m_upgrade + 1;
     if (m_upgrade >= 10)
     {
         Notify("무기가 최대 강화 단계에 도달했습니다.");
         return;
     }
-    if (m_stones < cost)
+    if (m_economy.ItemCount(InventoryItem::UpgradeStone) < cost)
     {
         Notify("강화석이 부족합니다. 필요 수량: " + std::to_string(cost));
         return;
     }
-    m_stones -= cost;
+    m_economy.ConsumeItems(InventoryItem::UpgradeStone, cost);
     ++m_upgrade;
     Notify("무기 강화 성공! +" + std::to_string(m_upgrade) + " / 공격력 " + std::to_string(Damage()));
 }
@@ -86,7 +91,7 @@ void LevelOne::RewardMonster(bool epic)
     if (epic)
     {
         m_bossDefeated = true;
-        Notify("에픽 몬스터 처치! 현재 아이템 드랍은 비활성화 상태입니다.");
+        Notify("에픽 몬스터 처치! 전리품·장비를 확인하세요.");
     }
 }
 
@@ -171,10 +176,11 @@ void LevelOne::AddNumber(Vec3 position, int amount, bool player)
 
 void LevelOne::HitPlayer(int damage)
 {
-    if (m_invincible > 0 || m_health <= 0)
+    if (damage <= 0 || m_invincible > 0 || m_health <= 0)
     {
         return;
     }
+    damage = (std::max)(1, damage - m_economy.EquipmentDefence());
     m_health = (std::max)(0.f, m_health - damage);
     m_invincible = .65f;
     m_sinceHit = 0;
@@ -222,4 +228,9 @@ bool LevelOne::EndFrame()
     Recover();
     Notify("쓰러졌습니다. 항구에서 회복했습니다. 경험치와 장비는 유지됩니다.");
     return true;
+}
+
+void LevelOne::EquipmentChanged()
+{
+    m_health = (std::min)(m_health, float(MaxHealth()));
 }

@@ -95,9 +95,11 @@ void Prototype::ToggleTestMap()
     m_scene.SetParent(m_deckSlash, m_shipActor);
     m_marine->SetActive(false);
     m_monsters->SetActive(false);
+    m_npcs->SetActive(false);
     m_world.SwitchMap();
     m_marine.swap(m_parkedMarine);
     m_monsters.swap(m_parkedMonsters);
+    m_npcs.swap(m_parkedNpcs);
     if (!m_marine)
     {
         m_marine.reset(new MarineSystem(
@@ -117,11 +119,21 @@ void Prototype::ToggleTestMap()
             {
                 m_levelOne.TakeDamage(damage);
             },
-            [this](bool epic)
+            [this](IslandKey island, bool epic)
             {
                 m_levelOne.RewardMonster(epic);
+                m_economy.RecordMonsterKill(island, epic);
+            },
+            [this](InventoryItem item)
+            {
+                return m_economy.CollectItem(item);
             }));
     }
+    if (!m_npcs)
+    {
+        m_npcs.reset(new NpcSystem(m_scene, m_world, m_economy));
+    }
+    m_npcs->SetActive(true);
     m_marine->SetActive(true);
     m_monsters->SetActive(true);
     RestoreTravelState();

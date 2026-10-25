@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cmath>
 #include <limits>
+#include "MeshCache.h"
 
 namespace
 {
@@ -36,11 +37,42 @@ MonsterSystem::MonsterSystem(
     SceneGraph& scene,
     World& world,
     std::function<void(int)> hitPlayer,
-    std::function<void(bool)> defeated)
-    : m_scene(scene), m_world(world), m_hitPlayer(std::move(hitPlayer)), m_defeated(std::move(defeated))
+    std::function<void(IslandKey, bool)> defeated,
+    std::function<bool(InventoryItem)> collect)
+    : m_scene(scene), m_world(world), m_hitPlayer(std::move(hitPlayer)), m_defeated(std::move(defeated)),
+      m_collect(std::move(collect))
 {
+    const auto seed = static_cast<unsigned>(std::chrono::steady_clock::now().time_since_epoch().count());
+    m_random.seed(seed);
+    m_dropMaterial = MeshCache::LoadOrCreate(
+        "monster_item_material_v1",
+        []
+        {
+            Mesh m;
+            Geometry::Cone(m, {0, 0, 0}, .22f, .4f, {.91f, .71f, .25f}, 6);
+            return m;
+        });
+    m_dropWeapon = MeshCache::LoadOrCreate(
+        "monster_item_weapon_v1",
+        []
+        {
+            Mesh m;
+            Geometry::Box(m, {-.04f, 0, -.04f}, {.08f, .75f, .08f}, {.8f, .9f, .93f});
+            Geometry::Box(m, {-.2f, .15f, -.05f}, {.4f, .08f, .1f}, {.91f, .71f, .25f});
+            return m;
+        });
+    m_dropArmor = MeshCache::LoadOrCreate(
+        "monster_item_armor_v1",
+        []
+        {
+            Mesh m;
+            Geometry::Box(m, {-.2f, 0, -.14f}, {.4f, .4f, .28f}, {.33f, .55f, .74f});
+            return m;
+        });
     Diagnostics::Get().Event(
-        "monster_preview catalog=40 ordinary=32 epic=8 drops=disabled probability=disabled");
+        "monster_preview catalog=40 ordinary=32 epic=8 item_drop_chance=50 spawn_probability=disabled "
+        "drop_seed=" +
+        std::to_string(seed));
 }
 
 MonsterSystem::~MonsterSystem()
@@ -267,6 +299,25 @@ void MonsterSystem::Update(float dt, const WorldPosition& player, bool onLand, b
         {
             group.coarseTime = 0;
         }
+        for (auto it = group.drops.begin(); it != group.drops.end();)
+        {
+            auto* drop = m_scene.Get<MonsterItemDrop>(*it);
+            if (!drop)
+            {
+                it = group.drops.erase(it);
+                continue;
+            }
+            if (m_world.IsActive(Position(group, drop->transform.position)) &&
+                drop->Tick(dt, group.context, m_collect))
+            {
+                drop->Destroy();
+                it = group.drops.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
     }
 }
 
@@ -291,6 +342,14 @@ void MonsterSystem::Prepare(const WorldPosition& camera, bool showStatus)
             actor->showStatus = showStatus;
             actor->visible =
                 actor->health > 0 && m_world.IsActive(Position(group, actor->transform.position));
+        }
+        for (auto id : group.drops)
+        {
+            auto* drop = m_scene.Get<MonsterItemDrop>(id);
+            if (drop)
+            {
+                drop->visible = m_world.IsActive(Position(group, drop->transform.position));
+            }
         }
     }
 }
@@ -341,10 +400,38 @@ void MonsterSystem::Attack(const WorldPosition& player, Vec3 aim, int damage)
             " hp=" + std::to_string(actor->health) + " damage=" + std::to_string(damage));
         if (killed)
         {
-            // Item drops are intentionally disabled; future drop policy belongs here.
-            Diagnostics::Get().Event(
-                "monster_defeated species=" + std::to_string(actor->definition.id) + " drops=disabled");
-            m_defeated(actor->definition.epic);
+            Diagnostics::Get().Event("monster_defeated species=" + std::to_string(actor->definition.id));
+            for (const auto& entry : MonsterDrops(actor->definition.id, actor->definition.epic))
+            {
+                const unsigned roll = std::uniform_int_distribution<unsigned>(0, 99)(m_random);
+                const bool hit = roll < entry.chance;
+                Diagnostics::Get().Event(
+                    "monster_drop_roll species=" + std::to_string(actor->definition.id) +
+                    " item=" + std::to_string(static_cast<unsigned>(entry.item)) +
+                    " chance=" + std::to_string(entry.chance) + " roll=" + std::to_string(roll) +
+                    " hit=" + std::to_string(hit));
+                if (!hit)
+                {
+                    continue;
+                }
+                for (int unit = 0; unit < entry.count; ++unit)
+                {
+                    if (group.drops.size() >= 128)
+                    {
+                        m_collect(entry.item);
+                        continue;
+                    }
+                    const auto& def = ItemCatalog::Get(entry.item);
+                    const auto mesh = def.icon == ItemIcon::Sword
+                                          ? m_dropWeapon
+                                          : (def.equipment != EquipSlot::None ? m_dropArmor : m_dropMaterial);
+                    group.drops.push_back(
+                        m_scene
+                            .Create<MonsterItemDrop>(group.root, mesh, entry.item, actor->transform.position)
+                            .Id());
+                }
+            }
+            m_defeated(layout->Info().key, actor->definition.epic);
         }
     }
 }

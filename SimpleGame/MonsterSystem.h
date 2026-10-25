@@ -3,6 +3,8 @@
 #include "World.h"
 #include <map>
 #include <memory>
+#include "MonsterItemDrop.h"
+#include <random>
 
 class MonsterSystem
 {
@@ -11,7 +13,8 @@ public:
         SceneGraph& scene,
         World& world,
         std::function<void(int)> hitPlayer,
-        std::function<void(bool)> defeated);
+        std::function<void(IslandKey, bool)> defeated,
+        std::function<bool(InventoryItem)> collect);
     ~MonsterSystem();
     void Update(float dt, const WorldPosition& player, bool onLand, bool paused = false);
     void SetActive(bool active);
@@ -29,6 +32,7 @@ private:
         MonsterContext context;
         ActorId root = NoActor;
         std::vector<ActorId> monsters;
+        std::vector<ActorId> drops;
         bool seen = false;
         float flowTime = 0, coarseTime = 0;
         int flowCell = -1;
@@ -40,7 +44,10 @@ private:
     SceneGraph& m_scene;
     World& m_world;
     MonsterMeshes m_meshes;
+    CachedMesh m_dropMaterial, m_dropWeapon, m_dropArmor;
+    std::mt19937 m_random;
     std::function<void(int)> m_hitPlayer;
-    std::function<void(bool)> m_defeated;
+    std::function<void(IslandKey, bool)> m_defeated;
+    std::function<bool(InventoryItem)> m_collect;
     std::map<IslandKey, std::unique_ptr<Group>> m_groups;
 };

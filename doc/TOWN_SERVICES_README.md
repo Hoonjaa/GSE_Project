@@ -2,6 +2,8 @@
 
 2026-10-24 사용자 확정 사항을 반영한 구현 기록.
 
+> 최신 NPC 작업으로 동료 정원은 2명, I 인벤토리/K 적재창, 상점은 선택 구매·판매/호감도 거래로 변경됐다. 전리품도 새 종별 드랍을 사용한다. 아래는 초기 구현 기록이며 현재 조작·가격·적용 범위는 [NPC_INVENTORY_IMPLEMENTATION_REPORT.md](NPC_INVENTORY_IMPLEMENTATION_REPORT.md)를 우선 참조한다.
+
 ## 가격과 단계
 
 | 항목 | 규칙 |

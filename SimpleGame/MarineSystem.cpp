@@ -432,8 +432,12 @@ bool MarineSystem::Update(
         if (!alive)
         {
             m_encounter = SeaEncounter::None;
-            Notify("촉수 4개를 절단했습니다! 현재 몬스터 아이템 드랍은 비활성화 상태입니다.");
-            Diagnostics::Get().Event("kraken_defeated drops=disabled");
+            const bool dropped = std::uniform_int_distribution<int>(0, 99)(m_random) < 50;
+            const bool collected = dropped && m_economy.CollectItem(InventoryItem::Tentacle);
+            Notify(
+                collected ? "크라켄 처치! 촉수 1개를 얻었습니다."
+                          : "크라켄 처치! 이번에는 전리품이 없습니다.");
+            Diagnostics::Get().Event("kraken_defeated drop_chance=50 collected=" + std::to_string(collected));
         }
     }
     if (m_encounter == SeaEncounter::Storm)

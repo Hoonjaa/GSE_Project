@@ -5,7 +5,7 @@
 
 void Prototype::RenderPlayerPanel(Renderer& r) const
 {
-    if (!m_cargoOpen)
+    if (!m_cargoOpen || m_inventoryOpen || m_talk.valid)
     {
         return;
     }
@@ -15,25 +15,28 @@ void Prototype::RenderPlayerPanel(Renderer& r) const
     const float top = (std::max)(12.f, (r.Height() - 600.f) * .5f);
     if (width < 300 || r.Height() < 620)
     {
-        r.Text(12, 12, "적재창을 보려면 창을 키워주세요. I / E / Esc: 닫기", gold, 1, float(r.Width() - 24));
+        r.Text(12, 12, "적재창을 보려면 창을 키워주세요. K / E / Esc: 닫기", gold, 1, float(r.Width() - 24));
         return;
     }
     r.Panel(left, top, width, 600, ink);
     r.Text(left + 18, top + 14, "8m 돛단배 적재창 · 5종류 슬롯", gold, 2);
-    r.Text(left + 18, top + 48, "W/S: 품목 선택  D: 싣기  A: 내리기  I/E/Esc: 닫기", paper, 1.3f);
-    r.Text(left + 18, top + 80, "같은 아이템은 한 슬롯만 사용 · 현재 품목은 최대 20개 중첩", paper, 1.2f);
-    for (unsigned i = 0; i < 4; ++i)
+    r.Text(left + 18, top + 48, "W/S: 품목 선택  D: 싣기  A: 내리기  K/E/Esc: 닫기", paper, 1.3f);
+    r.Text(left + 18, top + 80, "같은 아이템은 한 슬롯만 사용 · 품목마다 중첩 상한이 다릅니다", paper, 1.2f);
+    const auto items = CargoItems();
+    const unsigned selection = items.empty() ? 0 : (std::min)(m_cargoSelection, unsigned(items.size() - 1));
+    const unsigned first = (selection / 4) * 4;
+    for (unsigned i = first; i < first + 4 && i < items.size(); ++i)
     {
-        const auto item = static_cast<InventoryItem>(i);
-        const float y = top + 115 + i * 38;
-        if (i == m_cargoSelection)
+        const auto item = items[i];
+        const float y = top + 115 + (i - first) * 38;
+        if (i == selection)
         {
             r.Panel(left + 12, y - 4, width - 24, 34, {.16f, .32f, .34f});
         }
         r.Text(
             left + 22,
             y,
-            std::string(i == m_cargoSelection ? "> " : "  ") + EconomyRules::ItemName(item) + " / 가방 " +
+            std::string(i == selection ? "> " : "  ") + EconomyRules::ItemName(item) + " / 가방 " +
                 std::to_string(m_economy.ItemCount(item)),
             paper,
             1.5f,
@@ -59,7 +62,7 @@ void Prototype::RenderPlayerPanel(Renderer& r) const
     r.Text(
         left + 18,
         top + 490,
-        "크라켄 촉수는 판매가 미정 / 특산품 거래는 가격 설정 대기",
+        "W/S로 보유 품목 선택 / 상점에서 특산품·전리품 판매 가능",
         paper,
         1.2f,
         width - 36);
@@ -113,12 +116,5 @@ void Prototype::RenderPlayerStatus(Renderer& r) const
     }
     r.Text(left + 12, top + 78, activity, gold, 1.4f, width - 24);
     r.Text(left + 12, top + 108, m_marine->Notice(), paper, 1.3f, width - 24);
-    r.Text(
-        left + 12,
-        top + 158,
-        "가방: 물고기 " + std::to_string(m_economy.ItemCount(InventoryItem::Fish)) + " / 촉수 " +
-            std::to_string(m_economy.ItemCount(InventoryItem::Tentacle)),
-        paper,
-        1.3f,
-        width - 24);
+    r.Text(left + 12, top + 158, "I: 인벤토리·장비 / K: 선박 적재창", paper, 1.3f, width - 24);
 }

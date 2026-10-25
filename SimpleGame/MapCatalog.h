@@ -82,13 +82,12 @@ namespace MapCatalog
     bool IsSpecialty(IslandShape shape, TradeGood good);
 }
 
-// Price/affinity policy is deliberately supplied by gameplay configuration.
-// A missing policy must not create free items or invent a base price.
+// Quotes are supplied by a pricing policy; the prototype policy uses ItemCatalog base prices.
 struct TradeQuote
 {
     bool available = false;
     std::int64_t amount = 0;
-    const char* reason = "거래 가격과 호감도 규칙이 아직 설정되지 않았습니다.";
+    const char* reason = "거래할 수 없는 상품입니다.";
 };
 
 class TradePricing
@@ -108,5 +107,5 @@ struct MarketOffer
 
 namespace MapCatalog
 {
-    std::array<MarketOffer, 32> Offers(IslandShape shape);
+    std::array<MarketOffer, 32> Offers(IslandShape shape, int affinity = 0);
 }

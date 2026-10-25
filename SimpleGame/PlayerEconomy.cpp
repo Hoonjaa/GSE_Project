@@ -17,53 +17,18 @@ InventoryItem EconomyRules::CoralItem(CoralLoot kind)
 
 const char* EconomyRules::ItemName(InventoryItem item)
 {
-    switch (item)
-    {
-        case InventoryItem::NormalCoral:
-            return "산호 전리품";
-        case InventoryItem::BossCoral:
-            return "보스 산호 전리품";
-        case InventoryItem::Fish:
-            return "물고기";
-        case InventoryItem::Tentacle:
-            return "크라켄 촉수";
-        default:
-            const auto id = static_cast<unsigned>(item);
-            if (id >= 4 && id < ItemCount)
-            {
-                return MapCatalog::GoodName(static_cast<TradeGood>(id - 4));
-            }
-            return "알 수 없는 아이템";
-    }
+    const auto id = static_cast<unsigned>(item);
+    return id < ItemCatalog::Count ? ItemCatalog::Get(item).name.c_str() : "알 수 없는 아이템";
 }
 
 std::int64_t EconomyRules::ItemPrice(InventoryItem item)
 {
-    switch (item)
-    {
-        case InventoryItem::NormalCoral:
-            return 5;
-        case InventoryItem::BossCoral:
-            return 20;
-        case InventoryItem::Fish:
-            return 2;
-        default:
-            return 0; // No price means unavailable, not a free transaction.
-    }
+    return static_cast<unsigned>(item) < ItemCatalog::Count ? ItemCatalog::Get(item).price : 0;
 }
 
 std::int64_t EconomyRules::ItemStack(InventoryItem item)
 {
-    switch (item)
-    {
-        case InventoryItem::NormalCoral:
-        case InventoryItem::BossCoral:
-        case InventoryItem::Fish:
-        case InventoryItem::Tentacle:
-            return 20;
-        default:
-            return 0; // Further item limits need game-design configuration.
-    }
+    return static_cast<unsigned>(item) < ItemCatalog::Count ? ItemCatalog::Get(item).stack : 0;
 }
 
 const char* EconomyRules::LootName(CoralLoot kind)
@@ -99,13 +64,31 @@ bool PlayerEconomy::Collect(CoralLoot kind)
 
 bool PlayerEconomy::CollectItem(InventoryItem item)
 {
+    return CollectItems(item, 1);
+}
+
+bool PlayerEconomy::CollectItems(InventoryItem item, std::int64_t count)
+{
     const auto id = static_cast<size_t>(item);
-    if (id >= m_bag.size() || m_bag[id] == (std::numeric_limits<std::int64_t>::max)())
+    if (id >= m_bag.size() || count <= 0 || count > (std::numeric_limits<std::int64_t>::max)() - m_bag[id])
     {
         return false;
     }
-    ++m_bag[id];
-    Diagnostics::Get().Event("item_collected id=" + std::to_string(id) + " bag=" + std::to_string(m_bag[id]));
+    m_bag[id] += count;
+    Diagnostics::Get().Event(
+        "item_collected id=" + std::to_string(id) + " count=" + std::to_string(count) +
+        " bag=" + std::to_string(m_bag[id]));
+    return true;
+}
+
+bool PlayerEconomy::ConsumeItems(InventoryItem item, std::int64_t count)
+{
+    const auto id = static_cast<size_t>(item);
+    if (id >= m_bag.size() || count <= 0 || m_bag[id] < count)
+    {
+        return false;
+    }
+    m_bag[id] -= count;
     return true;
 }
 
@@ -126,42 +109,6 @@ EconomyResult PlayerEconomy::CollectPirateLoot(int gold, int tentacles)
         "약탈 완료! 골드 +" + std::to_string(gold) + " / 크라켄 촉수 +" + std::to_string(tentacles)};
 }
 
-EconomyResult PlayerEconomy::SellAll()
-{
-    auto remaining = (std::numeric_limits<std::int64_t>::max)() - m_gold;
-    std::int64_t revenue = 0;
-    for (size_t i = 0; i < m_bag.size(); ++i)
-    {
-        const auto price = EconomyRules::ItemPrice(static_cast<InventoryItem>(i));
-        if (price <= 0)
-        {
-            continue;
-        }
-        if (m_bag[i] > remaining / price)
-        {
-            return {false, "골드 보유 한도를 초과합니다."};
-        }
-        const auto value = m_bag[i] * price;
-        remaining -= value;
-        revenue += value;
-    }
-    if (!revenue)
-    {
-        return {false, "판매 가능한 전리품이나 물고기가 없습니다."};
-    }
-    for (size_t i = 0; i < m_bag.size(); ++i)
-    {
-        if (EconomyRules::ItemPrice(static_cast<InventoryItem>(i)) > 0)
-        {
-            m_bag[i] = 0;
-        }
-    }
-    m_gold += revenue;
-    Diagnostics::Get().Event(
-        "inventory_items_sold revenue=" + std::to_string(revenue) + " gold=" + std::to_string(m_gold));
-    return {true, "전리품과 물고기를 판매했습니다. +" + std::to_string(revenue) + "골드"};
-}
-
 EconomyResult PlayerEconomy::BuySailboat()
 {
     if (m_hasShip)
@@ -174,7 +121,7 @@ EconomyResult PlayerEconomy::BuySailboat()
     }
     m_gold -= EconomyRules::SailboatPrice;
     m_hasShip = true;
-    Diagnostics::Get().Event("sailboat_purchased price=50 length=8 companions=1 cargo_kinds=5");
+    Diagnostics::Get().Event("sailboat_purchased price=50 length=8 companions=2 cargo_kinds=5");
     return {true, "8m 돛단배 구매 완료! 부두에서 E로 승선하세요."};
 }
 

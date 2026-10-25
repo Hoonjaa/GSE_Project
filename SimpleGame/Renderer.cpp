@@ -750,7 +750,14 @@ void Renderer::Panel(float x, float y, float w, float h, Color c)
     Geometry::Quad(m_batch, {l, t, 0}, {r, t, 0}, {r, b, 0}, {l, b, 0}, c);
 }
 
-void Renderer::Text(float x, float y, const std::string& text, Color c, float scale, float maxWidth)
+void Renderer::Text(
+    float x,
+    float y,
+    const std::string& text,
+    Color c,
+    float scale,
+    float maxWidth,
+    float maxHeight)
 {
     if (!m_fontReady || text.empty() || scale <= 0 ||
         text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
@@ -777,6 +784,7 @@ void Renderer::Text(float x, float y, const std::string& text, Color c, float sc
         static_cast<int>(text.size()),
         &wide[0],
         length);
+    const float bottom = maxHeight > 0 ? (std::min)(float(m_height), y + maxHeight) : float(m_height);
     const float factor = scale * 9.f / 28.f;
     const float left = x,
                 right = maxWidth > 0 ? (std::min)(x + maxWidth, float(m_width - 8)) : float(m_width - 8);
@@ -822,7 +830,7 @@ void Renderer::Text(float x, float y, const std::string& text, Color c, float sc
             x = left;
             y += 12 * scale;
         }
-        if (y + 9 * scale > m_height)
+        if (y + 9 * scale > bottom)
         {
             break;
         }

@@ -26,7 +26,7 @@ bool Prototype::BoardShip()
     m_scene.SetParent(m_playerActor, m_shipActor);
     SyncBoardedPlayer();
     ClearInput();
-    m_message = "승선했습니다. 타륜 가까이에서 E: 조종 / 가장자리에서 F: 낚시 / I: 적재창";
+    m_message = "승선했습니다. 타륜 가까이에서 E: 조종 / 가장자리에서 F: 낚시 / K: 적재창";
     m_messageTime = 7;
     Diagnostics::Get().Event("player_boarded mode=deck");
     return true;
@@ -221,19 +221,26 @@ void Prototype::ToggleCargo()
 
 void Prototype::CargoKey(unsigned char key)
 {
-    if (key == 'i' || key == 'e' || key == 27)
+    if (key == 'k' || key == 'e' || key == 27)
     {
         m_cargoOpen = false;
         ClearInput();
         return;
     }
+    const auto items = CargoItems();
+    if (items.empty())
+    {
+        m_cargoSelection = 0;
+        return;
+    }
+    m_cargoSelection = (std::min)(m_cargoSelection, unsigned(items.size() - 1));
     if (key == 'w')
     {
-        m_cargoSelection = (m_cargoSelection + 3) % 4;
+        m_cargoSelection = (m_cargoSelection + unsigned(items.size()) - 1) % unsigned(items.size());
     }
     else if (key == 's')
     {
-        m_cargoSelection = (m_cargoSelection + 1) % 4;
+        m_cargoSelection = (m_cargoSelection + 1) % unsigned(items.size());
     }
     else if (key == 'a' || key == 'd')
     {
@@ -242,7 +249,7 @@ void Prototype::CargoKey(unsigned char key)
             m_serviceMessage = "선박에 접근한 뒤 다시 이용하세요.";
             return;
         }
-        const auto item = static_cast<InventoryItem>(m_cargoSelection);
+        const auto item = items[m_cargoSelection];
         m_serviceMessage = (key == 'd' ? m_economy.StoreItem(item) : m_economy.UnloadItem(item)).message;
     }
 }
@@ -285,4 +292,17 @@ void Prototype::DebugSeaThreat(int kind)
 #else
     (void)kind;
 #endif
+}
+
+std::vector<InventoryItem> Prototype::CargoItems() const
+{
+    auto items = BagItems();
+    for (const auto& slot : m_economy.Cargo())
+    {
+        if (slot.occupied && std::find(items.begin(), items.end(), slot.item) == items.end())
+        {
+            items.push_back(slot.item);
+        }
+    }
+    return items;
 }

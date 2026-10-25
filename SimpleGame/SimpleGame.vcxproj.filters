@@ -18,6 +18,11 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <Text Include="..\doc\SCENE_GRAPH_README.txt" />
+    <Text Include="..\doc\DRAW_CALL_OPTIMIZATION_REPORT.md" />
+    <Text Include="..\doc\PERFORMANCE_ANALYSIS_LOG.md" />
+    <Text Include="..\doc\NPC.md" />
+    <Text Include="..\doc\NPC_INVENTORY_IMPLEMENTATION_REPORT.md" />
     <Text Include="..\doc\player.md" />
     <Text Include="..\doc\PLAYER_IMPLEMENTATION_REPORT.md" />
     <Text Include="..\doc\PIRATE_BOARDING_REPORT.md" />
@@ -35,6 +40,24 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="targetver.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ItemCatalog.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="NpcData.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="TradeRules.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="NpcDialogue.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="NpcSystem.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="MonsterItemDrop.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="Actor.h">
@@ -130,6 +153,42 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="SimpleGame.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ItemCatalog.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="InventoryEquipment.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="InventoryIcons.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="RendererIcon.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="NpcRelations.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="TradeRules.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="NpcDialogue.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="NpcSystem.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MonsterItemDrop.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="PrototypeInventory.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="PrototypeNpc.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="PrototypeTrade.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="Actor.cpp">

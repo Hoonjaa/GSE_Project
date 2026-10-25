@@ -7,6 +7,17 @@
 
 bool Prototype::CloseServiceMenu()
 {
+    if (m_inventoryOpen || m_talk.valid)
+    {
+        m_inventoryOpen = false;
+        m_talk = {};
+        if (m_npcs)
+        {
+            m_npcs->Close();
+        }
+        ClearInput();
+        return true;
+    }
     if (m_cargoOpen)
     {
         m_cargoOpen = false;
@@ -67,17 +78,14 @@ void Prototype::ServiceKey(unsigned char key)
     }
     if (m_service.kind == TownServiceKind::Shop)
     {
-        if (key == 's')
-        {
-            m_serviceMessage = m_economy.SellAll().message;
-        }
+        TradeKey(key);
         return;
     }
     if (m_service.kind != TownServiceKind::Shipyard)
     {
         return;
     }
-    if (key == 'i')
+    if (key == 'k')
     {
         ToggleCargo();
         return;
@@ -116,8 +124,13 @@ void Prototype::ServiceKey(unsigned char key)
 
 void Prototype::RenderServiceMenu(Renderer& renderer) const
 {
-    if (m_cargoOpen || m_service.kind == TownServiceKind::None)
+    if (m_inventoryOpen || m_talk.valid || m_cargoOpen || m_service.kind == TownServiceKind::None)
     {
+        return;
+    }
+    if (m_service.kind == TownServiceKind::Shop)
+    {
+        RenderTrade(renderer);
         return;
     }
     if (renderer.Width() < 300 || renderer.Height() < 430)
@@ -131,85 +144,55 @@ void Prototype::RenderServiceMenu(Renderer& renderer) const
             static_cast<float>((std::max)(1, renderer.Width() - 24)));
         return;
     }
-    const bool shop = m_service.kind == TownServiceKind::Shop;
     const float width = (std::min)(640.f, float(renderer.Width() - 24));
-    const float height = shop ? 245.f : 400.f;
+    const float height = 400.f;
     const float left = (renderer.Width() - width) * .5f;
     const float top = (std::max)(12.f, (renderer.Height() - height) * .5f);
     const Color ink = {.06f, .16f, .22f}, paper = {.96f, .90f, .72f}, gold = {.98f, .76f, .35f};
     renderer.Panel(left, top, width, height, ink);
-    renderer.Panel(left, top, width, 4, shop ? Color{.84f, .66f, .26f} : Color{.28f, .65f, .75f});
-    renderer.Text(
-        left + 20,
-        top + 16,
-        shop ? "상점 · 전리품과 물고기 매입" : "조선소 · 선박 구매 및 업그레이드",
-        gold,
-        2,
-        width - 40);
+    renderer.Panel(left, top, width, 4, Color{.28f, .65f, .75f});
+    renderer.Text(left + 20, top + 16, "조선소 · 선박 구매 및 업그레이드", gold, 2, width - 40);
     renderer.Text(left + 20, top + 48, "보유 골드: " + std::to_string(m_economy.Gold()), paper, 1.6f);
+    renderer.Text(left + 20, top + 72, "I: 인벤토리·장비 / K: 선박 적재창", paper, 1.4f, width - 40);
+    renderer.Text(left + 20, top + 100, "배 미소유 → 8m 돛단배 / 50골드", gold, 1.5f);
     renderer.Text(
         left + 20,
-        top + 72,
-        "소지 전리품: 일반 " + std::to_string(m_economy.LootCount(CoralLoot::Normal)) + "개 / 보스 " +
-            std::to_string(m_economy.LootCount(CoralLoot::Boss)) + "개",
+        top + 124,
+        "동료 정원 " + std::to_string(EconomyRules::CompanionCapacity) +
+            "명 / 적재 5종류 / 품목별 중첩 상한 적용",
+        paper,
+        1.25f,
+        width - 40);
+    renderer.Text(
+        left + 20,
+        top + 148,
+        m_economy.HasShip() ? "현재 단계 구매 완료 · 상위 업그레이드는 준비 중입니다."
+                            : "[B 또는 U] 돛단배 구매·업그레이드",
         paper,
         1.4f,
         width - 40);
-    if (shop)
+    renderer.Text(
+        left + 20,
+        top + 174,
+        "K: 전체 적재창 / 1·2 산호 싣기 / 3·4 산호 내리기",
+        paper,
+        1.2f,
+        width - 40);
+    const auto& cargo = m_economy.Cargo();
+    for (size_t i = 0; i < cargo.size(); ++i)
     {
-        renderer
-            .Text(left + 20, top + 102, "일반 5골드 / 보스 20골드 / 물고기 2골드", gold, 1.4f, width - 40);
-        renderer.Text(left + 20, top + 128, "[S] 판매 가능한 소지품 전부 판매", paper, 1.6f);
-        renderer.Text(
-            left + 20,
-            top + 153,
-            "물고기 " + std::to_string(m_economy.ItemCount(InventoryItem::Fish)) +
-                "마리 / 적재품은 내린 뒤 판매",
-            paper,
-            1.2f,
-            width - 40);
-    }
-    else
-    {
-        renderer.Text(left + 20, top + 100, "배 미소유 → 8m 돛단배 / 50골드", gold, 1.5f);
-        renderer.Text(
-            left + 20,
-            top + 124,
-            "동료 정원 1명 / 적재 5종류 / 현재 전리품 중첩 상한 각각 20개",
-            paper,
-            1.25f,
-            width - 40);
-        renderer.Text(
-            left + 20,
-            top + 148,
-            m_economy.HasShip() ? "현재 단계 구매 완료 · 상위 업그레이드는 준비 중입니다."
-                                : "[B 또는 U] 돛단배 구매·업그레이드",
-            paper,
-            1.4f,
-            width - 40);
-        renderer.Text(
-            left + 20,
-            top + 174,
-            "I: 전체 적재창 / 1·2 산호 싣기 / 3·4 산호 내리기",
-            paper,
-            1.2f,
-            width - 40);
-        const auto& cargo = m_economy.Cargo();
-        for (size_t i = 0; i < cargo.size(); ++i)
+        const auto& slot = cargo[i];
+        std::string label = std::to_string(i + 1) + ". ";
+        if (slot.occupied)
         {
-            const auto& slot = cargo[i];
-            std::string label = std::to_string(i + 1) + ". ";
-            if (slot.occupied)
-            {
-                label += std::string(EconomyRules::ItemName(slot.item)) + " " + std::to_string(slot.count) +
-                         "/" + std::to_string(EconomyRules::ItemStack(slot.item));
-            }
-            else
-            {
-                label += "빈 적재 슬롯";
-            }
-            renderer.Text(left + 28, top + 202 + static_cast<float>(i) * 22, label, paper, 1.3f, width - 50);
+            label += std::string(EconomyRules::ItemName(slot.item)) + " " + std::to_string(slot.count) + "/" +
+                     std::to_string(EconomyRules::ItemStack(slot.item));
         }
+        else
+        {
+            label += "빈 적재 슬롯";
+        }
+        renderer.Text(left + 28, top + 202 + static_cast<float>(i) * 22, label, paper, 1.3f, width - 50);
     }
     if (!m_serviceMessage.empty())
     {
