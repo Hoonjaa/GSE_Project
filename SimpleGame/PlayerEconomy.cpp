@@ -5,6 +5,11 @@
 #include <algorithm>
 #include <limits>
 
+PlayerEconomy::PlayerEconomy()
+{
+    Diagnostics::Get().Event("economy_initial_gold=" + std::to_string(m_gold) + " reason=monster_preview");
+}
+
 InventoryItem EconomyRules::CoralItem(CoralLoot kind)
 {
     return kind == CoralLoot::Boss ? InventoryItem::BossCoral : InventoryItem::NormalCoral;

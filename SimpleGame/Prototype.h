@@ -4,6 +4,7 @@
 #include "LevelOne.h"
 #include "ShipDeck.h"
 #include "MarineSystem.h"
+#include "MonsterSystem.h"
 #include <array>
 #include <string>
 
@@ -90,6 +91,7 @@ private:
     PlayerEconomy m_economy;
     LevelOne m_levelOne;
     std::unique_ptr<MarineSystem> m_marine;
+    std::unique_ptr<MonsterSystem> m_monsters;
     WorldPosition m_camera;
     ActorId m_actorsRoot = NoActor, m_playerActor = NoActor, m_shipActor = NoActor;
     ActorId m_playerBody = NoActor, m_shipBody = NoActor, m_shadow = NoActor, m_wake = NoActor,

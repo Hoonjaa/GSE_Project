@@ -21,6 +21,8 @@
     <Text Include="..\doc\player.md" />
     <Text Include="..\doc\PLAYER_IMPLEMENTATION_REPORT.md" />
     <Text Include="..\doc\PIRATE_BOARDING_REPORT.md" />
+    <Text Include="..\doc\monster.md" />
+    <Text Include="..\doc\MONSTER_IMPLEMENTATION_REPORT.md" />
     <Text Include="..\doc\map.md" />
     <Text Include="..\doc\MAP_IMPLEMENTATION_REPORT.md" />
     <Text Include="..\doc\TOWN_SERVICES_README.md" />
@@ -92,6 +94,15 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="PirateRaid.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="MonsterCatalog.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="MonsterActor.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="MonsterSystem.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="Prototype.h">
@@ -193,6 +204,18 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="PrototypePirate.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MonsterCatalog.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MonsterMeshes.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MonsterActor.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MonsterSystem.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="PrototypePlayer.cpp">

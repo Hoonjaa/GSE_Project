@@ -22,6 +22,7 @@ enum class InventoryItem : unsigned
 namespace EconomyRules
 {
     constexpr std::int64_t SailboatPrice = 50;
+    constexpr std::int64_t InitialGold = 50; // Temporary monster preview funds, approved by the user.
     constexpr float SailboatLength = 8;
     constexpr size_t CompanionCapacity = 1, CargoKinds = 5, ItemCount = 36;
     InventoryItem CoralItem(CoralLoot kind);
@@ -49,6 +50,8 @@ struct EconomyResult
 class PlayerEconomy
 {
 public:
+    PlayerEconomy();
+
     bool HasShip() const
     {
         return m_hasShip;
@@ -82,7 +85,7 @@ public:
 
 private:
     std::array<std::int64_t, EconomyRules::ItemCount> m_bag = {};
-    std::int64_t m_gold = 0;
+    std::int64_t m_gold = EconomyRules::InitialGold;
     bool m_hasShip = false;
     std::array<CargoSlot, EconomyRules::CargoKinds> m_cargo = {};
 };

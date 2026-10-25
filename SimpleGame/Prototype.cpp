@@ -23,12 +23,23 @@ Prototype::Prototype() : m_world(m_scene), m_levelOne(m_scene, m_world.Tutorial(
         [this](int damage)
         {
             const float previous = m_levelOne.Health();
-            m_levelOne.TakeSeaDamage(damage);
+            m_levelOne.TakeDamage(damage);
             Diagnostics::Get().Event(
                 "pirate_player_damage requested=" + std::to_string(damage) +
                 " applied=" + std::to_string(previous - m_levelOne.Health()) +
                 " health=" + std::to_string(m_levelOne.Health()));
             return m_levelOne.Health() <= 0;
+        }));
+    m_monsters.reset(new MonsterSystem(
+        m_scene,
+        m_world,
+        [this](int damage)
+        {
+            m_levelOne.TakeDamage(damage);
+        },
+        [this](bool epic)
+        {
+            m_levelOne.RewardMonster(epic);
         }));
     Reset();
 }
@@ -219,9 +230,9 @@ void Prototype::MouseAttack(int x, int y, const Renderer& renderer)
         }
         return;
     }
-    m_levelOne.Attack(Player().location.RelativeTo(origin), aim, false);
-    if (m_levelOne.Attacking())
+    if (m_levelOne.Attack(Player().location.RelativeTo(origin), aim, false))
     {
+        m_monsters->Attack(Player().location, aim, m_levelOne.Damage());
         m_heading = std::atan2(aim.x, -aim.z);
     }
 }
@@ -297,7 +308,7 @@ void Prototype::Update(double dt, int width, int height)
     // Covers the inverse isometric viewport, with a margin for scenery and camera lag.
     const int radius = static_cast<int>(std::ceil((width * .354 + height * .613) / (m_zoom * ChunkSize))) + 1;
     m_world.Update(ActivePosition(), radius);
-    m_levelOne.SetActive(m_world.TutorialActive());
+    m_levelOne.SetActive(true);
     m_levelOne.SetActiveRegion(
         [this](Vec3 position)
         {
@@ -351,7 +362,11 @@ void Prototype::Update(double dt, int width, int height)
     SyncBoardedPlayer();
     WorldPosition origin;
     origin.x = origin.z = 0;
-    m_levelOne.BeginFrame(static_cast<float>(dt), Player().location.RelativeTo(origin), Aboard());
+    const auto* playerIsland = m_world.CurrentIsland(Player().location);
+    const auto islandLocal =
+        playerIsland ? Player().location.RelativeTo(playerIsland->Info().center) : Vec3{};
+    const bool village = playerIsland && playerIsland->Village(islandLocal.x, islandLocal.z);
+    m_levelOne.BeginFrame(static_cast<float>(dt), Player().location.RelativeTo(origin), Aboard(), village);
     RaidPlayer raidPlayer;
     raidPlayer.deck = m_deckPosition;
     raidPlayer.ownDeck = m_playerMode == PlayerMode::Deck || Sailing();
@@ -378,6 +393,7 @@ void Prototype::Update(double dt, int width, int height)
     UpdateFishing(static_cast<float>(dt));
 
     SyncBoardedPlayer();
+    m_monsters->Update(static_cast<float>(dt), Player().location, !Aboard() && m_levelOne.Health() > 0);
     m_scene.Update(static_cast<float>(dt));
     if (m_levelOne.EndFrame())
     {
@@ -393,6 +409,7 @@ void Prototype::Render(Renderer& r)
 {
     PrepareActors();
     m_marine->Prepare(m_camera, ShipActor().location);
+    m_monsters->Prepare(m_camera);
     r.SetSceneLight(m_marine->Light());
     r.SetPostProcessing(m_postSettings);
     r.Begin(m_zoom);

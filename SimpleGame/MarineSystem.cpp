@@ -417,9 +417,9 @@ bool MarineSystem::Update(
         }
         if (!alive)
         {
-            m_economy.CollectItem(InventoryItem::Tentacle);
             m_encounter = SeaEncounter::None;
-            Notify("촉수 4개를 절단했습니다! 크라켄 촉수 1개 획득.");
+            Notify("촉수 4개를 절단했습니다! 현재 몬스터 아이템 드랍은 비활성화 상태입니다.");
+            Diagnostics::Get().Event("kraken_defeated drops=disabled");
         }
     }
     if (m_encounter == SeaEncounter::Storm)

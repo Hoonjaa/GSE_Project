@@ -57,7 +57,8 @@ enum class MeshAnimation
     Flag = 2,
     Gull = 3,
     Rain = 4,
-    Tornado = 5
+    Tornado = 5,
+    HitFlash = 6
 };
 
 struct MeshInstance

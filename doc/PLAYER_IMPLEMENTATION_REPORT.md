@@ -2,6 +2,8 @@
 
 작성일: 2026-10-24
 
+2026-10-25 몬스터 확인 모드에서는 초기 골드 50, 육상·크라켄 처치 드랍 비활성화, 섬마다 일반 4종과 에픽 1종을 적용한다. 기존 산호 몬스터 파밍 관련 설명은 이 임시 모드에서 중단되며 [MONSTER_IMPLEMENTATION_REPORT.md](MONSTER_IMPLEMENTATION_REPORT.md)를 우선한다.
+
 ## 구현 범위
 
 - 기존 OpenGL 렌더러, Actor/SceneGraph, 월드 청크와 지상 레벨을 사용한다.

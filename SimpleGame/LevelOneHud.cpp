@@ -41,9 +41,8 @@ void LevelOne::Overlay(Renderer& renderer) const
     renderer.Text(
         34,
         214,
-        !m_economy.HasShip() ? "목표: 전리품 판매 → 50골드 → 조선소 돛단배 구매"
-                             : (m_bossDefeated ? "보스 처치 완료! 계속 파밍할 수 있습니다."
-                                               : "목표: 파밍 → 레벨 3·무기 강화 → 북쪽 보스"),
+        !m_economy.HasShip() ? "몬스터 확인용 50골드 · 조선소에서 돛단배 구매"
+                             : "섬마다 일반 4종·에픽 1종 / 아이템 드랍 비활성",
         Gold,
         1.5f);
     renderer.Text(34, 234, "좌클릭 근접 공격 / 붉은 원에서 벗어나세요", Paper, 1.4f);
@@ -68,9 +67,5 @@ void LevelOne::Map(Renderer& renderer, float left, float top, float extent, Vec3
         }
     };
     marker(m_terrain.SpawnPoint(), Gold, 5);
-    if (!m_bossDefeated)
-    {
-        marker(m_bossSpawn, {.95f, .22f, .17f}, 6);
-    }
     marker(player, Paper, 5);
 }

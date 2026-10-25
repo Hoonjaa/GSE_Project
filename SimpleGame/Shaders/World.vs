@@ -38,6 +38,10 @@ void main()
         float angle = i_Animation.y * 3.0 + local.y * 0.8;
         local.xz = mat2(cos(angle), sin(angle), -sin(angle), cos(angle)) * local.xz;
     }
+    else if (mode == 6)
+    {
+        color = mix(color, vec3(1.0, 0.96, 0.83), clamp(i_Animation.y, 0.0, 1.0));
+    }
     local *= i_Scale;
     vec3 p = vec3(
         local.x * i_Rotation.x - local.z * i_Rotation.y,

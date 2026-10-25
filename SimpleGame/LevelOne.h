@@ -1,6 +1,5 @@
 #pragma once
 #include "GameplayActors.h"
-#include <random>
 #include <string>
 
 // Level rules only: placement, progression, rewards, and player combat policy.
@@ -11,16 +10,17 @@ public:
     ~LevelOne();
     LevelOne(const LevelOne&) = delete;
     LevelOne& operator=(const LevelOne&) = delete;
-    void BeginFrame(float dt, Vec3 player, bool sailing);
+    void BeginFrame(float dt, Vec3 player, bool sailing, bool village);
     bool EndFrame();
     void Prepare(Vec3 offset, bool showHud);
     void SetActive(bool active);
     void SetActiveRegion(const std::function<bool(Vec3)>& isActive);
-    void Attack(Vec3 player, Vec3 aim, bool sailing);
+    bool Attack(Vec3 player, Vec3 aim, bool sailing);
+    void RewardMonster(bool epic);
     void Upgrade();
     void Recover();
 
-    void TakeSeaDamage(int damage)
+    void TakeDamage(int damage)
     {
         HitPlayer(damage);
     }
@@ -51,7 +51,6 @@ public:
     bool Attacking() const;
 
 private:
-    void Reward(const EnemyActor& enemy);
     void GainExperience(int amount);
     void Notify(const std::string& text);
     void HitPlayer(int damage);
@@ -65,12 +64,10 @@ private:
     const LevelOneTerrain& m_terrain;
     GameplayContext m_context;
     LevelMeshes m_meshes;
-    std::mt19937 m_random;
-    std::vector<ActorId> m_enemies, m_drops, m_numbers;
+    std::vector<ActorId> m_numbers;
     int m_level = 1, m_xp = 0, m_weapon = 0, m_upgrade = 0, m_stones = 0, m_kills = 0;
-    float m_health = 100, m_invincible = 0, m_sinceHit = 0, m_cooldown = 0, m_flowTime = 0;
+    float m_health = 100, m_invincible = 0, m_sinceHit = 0, m_cooldown = 0;
     float m_noticeTime = 0;
     bool m_bossDefeated = false, m_showHud = true;
-    Vec3 m_bossSpawn = {16.5f, .55f, -11.5f};
     std::string m_notice;
 };
