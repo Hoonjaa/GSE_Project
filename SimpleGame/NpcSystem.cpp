@@ -3,6 +3,7 @@
 #include "MeshCache.h"
 #include "ShipDeck.h"
 #include "Diagnostics.h"
+#include "QuestRules.h"
 #include <algorithm>
 #include <cmath>
 
@@ -49,11 +50,11 @@ namespace
     }
 }
 
-NpcSystem::NpcSystem(SceneGraph& scene, World& world, PlayerEconomy& economy)
-    : m_scene(scene), m_world(world), m_economy(economy)
+NpcSystem::NpcSystem(SceneGraph& scene, World& world, PlayerEconomy& economy, NpcState& relations)
+    : m_scene(scene), m_world(world), m_economy(economy), m_relations(relations)
 {
     m_root = m_scene.Create<Actor>(NoActor, "NPC와 동료").Id();
-    for (unsigned role = 0; role < 3; ++role)
+    for (unsigned role = 0; role < NpcRole::Count; ++role)
     {
         m_models[role] = MeshCache::LoadOrCreate(
             "quest_npc_v1_" + std::to_string(role),
@@ -85,19 +86,17 @@ NpcSystem::~NpcSystem()
 
 const NpcRecord& NpcSystem::State(const NpcKey& key) const
 {
-    return static_cast<const PlayerEconomy&>(m_economy).Npc(key);
+    return static_cast<const NpcState&>(m_relations).Npc(key);
 }
 
 const char* NpcSystem::Role(unsigned role)
 {
-    return role == 0 ? "사냥꾼" : (role == 1 ? "수집가" : "상인");
+    return QuestRules::Get(role).roleName;
 }
 
-const char* NpcSystem::Quest(unsigned role)
+std::string NpcSystem::Quest(unsigned role)
 {
-    return role == 0 ? "이 섬의 일반 몬스터 3마리를 처치해 주세요."
-                     : (role == 1 ? "이 섬 몬스터의 전리품 3개를 가져다 주세요."
-                                  : "이 섬 상점에서 특산품을 3개 구매해 주세요.");
+    return QuestRules::Description(role);
 }
 
 std::string NpcSystem::Name(const NpcKey& key) const
@@ -150,7 +149,7 @@ void NpcSystem::Sync()
                     points.push_back(p);
                 }
             }
-            if (points.size() < 3)
+            if (points.size() < NpcRole::Count)
             {
                 points.clear();
                 for (int i = 0; i < IslandLayout::Size * IslandLayout::Size; ++i)
@@ -162,7 +161,7 @@ void NpcSystem::Sync()
                     }
                 }
             }
-            for (unsigned role = 0; role < 3; ++role)
+            for (unsigned role = 0; role < NpcRole::Count; ++role)
             {
                 Vec3 best = resident.layout->Spawn();
                 float score = -1;
@@ -280,7 +279,7 @@ void NpcSystem::Update(
     }
     const auto* island = m_world.CurrentIsland(player);
     m_flowTime -= dt;
-    const auto& companions = m_economy.Companions();
+    const auto& companions = m_relations.Companions();
     if (island && !aboard && !companions.empty())
     {
         const auto p = player.RelativeTo(island->Info().center);
@@ -343,7 +342,7 @@ void NpcSystem::Prepare(const WorldPosition& camera, bool showLabels)
     {
         auto& resident = entry.second;
         m_scene.Find(resident.root)->transform.position = resident.layout->Info().center.RelativeTo(camera);
-        for (unsigned role = 0; role < 3; ++role)
+        for (unsigned role = 0; role < NpcRole::Count; ++role)
         {
             auto* actor = m_scene.Get<QuestNpcActor>(resident.actors[role]);
             const NpcKey key = {entry.first, role};
@@ -357,7 +356,7 @@ void NpcSystem::Prepare(const WorldPosition& camera, bool showLabels)
                 Name(key);
         }
     }
-    const auto& companions = m_economy.Companions();
+    const auto& companions = m_relations.Companions();
     for (unsigned i = 0; i < m_followers.size(); ++i)
     {
         auto& follower = m_followers[i];
@@ -380,7 +379,7 @@ NpcSelection NpcSystem::Nearby(const WorldPosition& player) const
     float nearest = 2.1f;
     for (const auto& entry : m_residents)
     {
-        for (unsigned role = 0; role < 3; ++role)
+        for (unsigned role = 0; role < NpcRole::Count; ++role)
         {
             const NpcKey key = {entry.first, role};
             if (State(key).recruited)
@@ -406,23 +405,7 @@ NpcSelection NpcSystem::Nearby(const WorldPosition& player) const
 
 int NpcSystem::Progress(const NpcSelection& selection) const
 {
-    if (State(selection.key).quest == QuestStatus::Complete)
-    {
-        return 3;
-    }
-    if (selection.key.role != 1)
-    {
-        return State(selection.key).progress;
-    }
-    std::int64_t total = 0;
-    for (unsigned i = 0; i < 5; ++i)
-    {
-        total += (std::min)(
-            std::int64_t(3),
-            m_economy.ItemCount(
-                ItemCatalog::MonsterMaterial(static_cast<unsigned>(selection.shape) * 5 + i)));
-    }
-    return int((std::min)(std::int64_t(3), total));
+    return m_relations.Progress(selection.key, selection.shape, m_economy);
 }
 
 void NpcSystem::Open(const NpcSelection& selection)
@@ -447,4 +430,11 @@ void NpcSystem::Open(const NpcSelection& selection)
 void NpcSystem::Close()
 {
     m_dialogue.Close();
+}
+
+bool NpcSystem::VillageNpcActive(const NpcKey& key) const
+{
+    const auto found = m_residents.find(key.island);
+    return found != m_residents.end() && !State(key).recruited &&
+           m_world.IsActive(Position(*found->second.layout, found->second.positions.at(key.role)));
 }

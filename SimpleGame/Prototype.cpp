@@ -3,81 +3,86 @@
 #include "KoreanText.h"
 #include "Diagnostics.h"
 #include "IslandTestMap.h"
-#include <cmath>
-#include <sstream>
-#include <iomanip>
 #include <algorithm>
+#include <cmath>
 
-namespace
-{
-    constexpr float Pi = 3.14159265359f;
-}
-
-Prototype::Prototype() : m_world(m_scene), m_levelOne(m_scene, m_world.Tutorial(), m_economy)
+Prototype::Prototype()
+    : m_world(m_scene), m_combat(m_scene, m_state.economy),
+      m_player(m_scene, m_world, m_state.economy, m_combat),
+      m_ui(m_world, m_state.economy, m_state.npcs, m_combat, m_player)
 {
     CreateActors();
-    m_marine.reset(new MarineSystem(
-        m_scene,
-        m_world,
-        m_economy,
-        m_shipActor,
-        [this](int damage)
-        {
-            const float previous = m_levelOne.Health();
-            m_levelOne.TakeDamage(damage);
-            Diagnostics::Get().Event(
-                "pirate_player_damage requested=" + std::to_string(damage) +
-                " applied=" + std::to_string(previous - m_levelOne.Health()) +
-                " health=" + std::to_string(m_levelOne.Health()));
-            return m_levelOne.Health() <= 0;
-        }));
-    m_monsters.reset(new MonsterSystem(
-        m_scene,
-        m_world,
-        [this](int damage)
-        {
-            m_levelOne.TakeDamage(damage);
-        },
-        [this](IslandKey island, bool epic)
-        {
-            m_levelOne.RewardMonster(epic);
-            m_economy.RecordMonsterKill(island, epic);
-        },
-        [this](InventoryItem item)
-        {
-            return m_economy.CollectItem(item);
-        }));
-    m_npcs.reset(new NpcSystem(m_scene, m_world, m_economy));
+    m_player.BindActors(m_actorsRoot, m_playerActor, m_shipActor, m_deckSlash);
+    CreateMapSystems();
     Reset();
+}
+
+void Prototype::CreateMapSystems()
+{
+    if (!m_marine)
+    {
+        m_marine.reset(new MarineSystem(
+            m_scene,
+            m_world,
+            m_state.economy,
+            m_shipActor,
+            [this](int damage)
+            {
+                const float previous = m_combat.Health();
+                m_combat.TakeDamage(damage);
+                Diagnostics::Get().Event(
+                    "pirate_player_damage requested=" + std::to_string(damage) +
+                    " applied=" + std::to_string(previous - m_combat.Health()) +
+                    " health=" + std::to_string(m_combat.Health()));
+                return m_combat.Health() <= 0;
+            }));
+    }
+    if (!m_monsters)
+    {
+        m_monsters.reset(new MonsterSystem(
+            m_scene,
+            m_world,
+            [this](int damage)
+            {
+                m_combat.TakeDamage(damage);
+            },
+            [this](IslandKey island, bool epic)
+            {
+                m_combat.RewardMonster(epic);
+                m_state.npcs.RecordMonsterKill(island, epic);
+            },
+            [this](InventoryItem item)
+            {
+                return m_state.economy.CollectItem(item);
+            }));
+    }
+    if (!m_npcs)
+    {
+        m_npcs.reset(new NpcSystem(m_scene, m_world, m_state.economy, m_state.npcs));
+    }
+    m_player.BindMarine(*m_marine);
+    m_ui.BindSystems(*m_marine, *m_npcs);
+}
+
+int Prototype::LoadRadius(float zoom) const
+{
+    return int(std::ceil((m_viewWidth * .354 + m_viewHeight * .613) / (zoom * ChunkSize))) + 1;
 }
 
 void Prototype::Reset()
 {
-    Player().location = m_world.StartSpawn();
-    ShipActor().location = m_world.StartShip(EconomyRules::SailboatLength);
-    m_cargoOpen = m_fishing = false;
-    CloseServiceMenu();
-    m_playerMode = PlayerMode::Land;
-    m_boardedPirate = -1;
-    m_scene.SetParent(m_playerActor, m_actorsRoot);
-    m_scene.SetParent(m_deckSlash, m_shipActor);
+    m_ui.CloseAll();
     if (m_marine)
     {
         m_marine->Reset();
     }
-    m_scene.Get<SlashActor>(m_deckSlash)->Stop();
+    m_player.Reset(
+        m_world.StartSpawn(),
+        m_world.StartShip(EconomyRules::SailboatLength),
+        m_world.OutboundHeading({0, 0}));
     m_camera = Player().location;
-    m_heading = 0;
-    m_shipHeading = m_world.OutboundHeading({0, 0});
-    m_keys.fill(false);
-    m_levelOne.Recover();
-    m_message = KoreanText::Welcome;
-    m_messageTime = 10;
-}
-
-void Prototype::ClearInput()
-{
-    m_keys.fill(false);
+    m_combat.Recover();
+    m_player.Notify(KoreanText::Welcome, 10);
 }
 
 void Prototype::Key(unsigned char key, bool down)
@@ -86,9 +91,7 @@ void Prototype::Key(unsigned char key, bool down)
     {
         key += 'a' - 'A';
     }
-    const bool pressed = down && !m_keys[key];
-    m_keys[key] = down;
-    if (!pressed)
+    if (!m_player.Press(key, down))
     {
         return;
     }
@@ -107,14 +110,14 @@ void Prototype::Key(unsigned char key, bool down)
     {
         return;
     }
-    if ((key == 'o' || key == 'p') && !PlayerPanelOpen())
+    if ((key == 'o' || key == 'p') && !m_ui.PlayerPanelOpen())
     {
         SummonSeaThreat(key == 'o' ? SeaEncounter::Storm : SeaEncounter::Kraken);
         return;
     }
-    if (m_marine && m_marine->Captured() && Aboard() && key != 'r')
+    if (m_marine->Captured() && Aboard() && key != 'r')
     {
-        m_fishing = false;
+        m_player.StopFishing();
         m_marine->EscapeKey(key);
         if (!m_marine->Captured())
         {
@@ -122,83 +125,33 @@ void Prototype::Key(unsigned char key, bool down)
         }
         return;
     }
-    if (key == 'i')
+    if (m_ui.Key(key))
     {
-        ToggleInventory();
-        return;
-    }
-    if (m_inventoryOpen)
-    {
-        InventoryKey(key);
-        return;
-    }
-    if (m_talk.valid)
-    {
-        NpcKeyInput(key);
-        return;
-    }
-    if (m_cargoOpen)
-    {
-        CargoKey(key);
-        return;
-    }
-    if (m_service.kind != TownServiceKind::None)
-    {
-        ServiceKey(key);
         return;
     }
     switch (key)
     {
         case 'e':
-            Interact();
+            if (!m_ui.Interact())
+            {
+                m_player.Interact();
+            }
             break;
         case 'g':
             m_grid = !m_grid;
             break;
-        case 'h':
-            m_hud = !m_hud;
-            break;
         case 'r':
             Reset();
-            break;
-        case 'k':
-            ToggleCargo();
             break;
         case 'f':
             if (Aboard())
             {
-                ToggleFishing();
+                m_player.ToggleFishing();
             }
             else
             {
-                m_levelOne.Upgrade();
+                m_combat.Upgrade();
             }
-            break;
-        case 'v':
-            m_postHud = !m_postHud;
-            break;
-        case 'b':
-            m_postSettings.enabled = !m_postSettings.enabled;
-            m_message = m_postSettings.enabled ? KoreanText::PostEnabled : KoreanText::PostDisabled;
-            m_messageTime = 5;
-            break;
-        case '1':
-            m_postSettings.toneMapping = !m_postSettings.toneMapping;
-            break;
-        case '2':
-            m_postSettings.vignette = !m_postSettings.vignette;
-            break;
-        case '3':
-            m_postSettings.edgeBlur = !m_postSettings.edgeBlur;
-            break;
-        case '[':
-            m_postSettings.exposure = (std::max)(.1f, m_postSettings.exposure - .1f);
-            break;
-        case ']':
-            m_postSettings.exposure = (std::min)(4.f, m_postSettings.exposure + .1f);
-            break;
-        case '0':
-            m_postSettings = PostProcessingSettings();
             break;
         case '+':
         case '=':
@@ -222,137 +175,28 @@ void Prototype::Zoom(int direction)
 
 void Prototype::MouseAttack(int x, int y, const Renderer& renderer)
 {
+    m_ui.SetView(
+        renderer.Width(),
+        renderer.Height(),
+        m_camera,
+        m_world.IsTestMap() && m_testOverview,
+        m_testIsland,
+        m_frameAverage);
     if (m_world.IsTestMap() && m_testOverview)
     {
         return;
     }
-    if (PlayerPanelOpen())
+    if (m_ui.ConsumesPointer(x, y))
     {
-        PanelClick(x, y);
+        m_ui.PanelClick(x, y);
         return;
     }
-    if (m_hud && m_world.IsTestMap() && x >= (std::max)(20, renderer.Width() - 370) && y < 205)
-    {
-        return;
-    }
-    if (m_hud && (y > renderer.Height() - 122 || (x < 445 && y < 255) ||
-                  (renderer.Width() > 760 && x > renderer.Width() - 192 && y < 220)))
-    {
-        return;
-    }
-    if (m_hud && m_world.CurrentIsland(ActivePosition()) && x >= 20 && x <= 450 && y >= 265 && y <= 351)
-    {
-        return;
-    }
-    if (Sailing())
-    {
-        m_message = "E로 타륜 조종을 마친 뒤 공격하세요.";
-        m_messageTime = 3;
-        return;
-    }
-    if (Aboard() && m_marine && m_marine->Captured())
-    {
-        return;
-    }
-    if (m_hud && Aboard() && x >= (std::max)(20, renderer.Width() - 450) && y >= 235 && y < 420)
-    {
-        return;
-    }
-    const auto hit = renderer.ScreenGround(x, y, Aboard() ? CurrentDeckHeight() + .5f : .55f);
+    const auto hit = renderer.ScreenGround(x, y, Aboard() ? m_player.CurrentDeckHeight() + .5f : .55f);
     const auto relative = Player().location.RelativeTo(m_camera);
     const Vec3 aim = {hit.x - relative.x, 0, hit.z - relative.z};
-    WorldPosition origin;
-    origin.x = 0;
-    origin.z = 0;
-    if (Aboard())
+    if (m_player.Attack(aim))
     {
-        m_fishing = false;
-        if (m_marine->Attack(
-                Player().location,
-                aim,
-                m_levelOne.Damage(),
-                m_shipHeading,
-                m_playerMode == PlayerMode::Deck))
-        {
-            const auto localAim = ShipDeck::ToLocal(aim, CurrentDeckHeading());
-            m_deckFacing = std::atan2(localAim.x, -localAim.z);
-            m_scene.Get<SlashActor>(m_deckSlash)->Trigger(m_deckPosition, localAim, CurrentDeckHeight());
-        }
-        return;
-    }
-    if (m_levelOne.Attack(Player().location.RelativeTo(origin), aim, false))
-    {
-        m_monsters->Attack(Player().location, aim, m_levelOne.Damage());
-        m_heading = std::atan2(aim.x, -aim.z);
-    }
-}
-
-void Prototype::Interact()
-{
-    if (Aboard())
-    {
-        BoardInteract();
-        return;
-    }
-    m_service = m_world.ServiceAt(Player().location);
-    if (m_service.kind != TownServiceKind::None)
-    {
-        ClearInput();
-        m_serviceMessage.clear();
-        m_marketSelection = 0;
-        m_buying = true;
-        return;
-    }
-    m_talk = m_npcs->Nearby(Player().location);
-    if (m_talk.valid)
-    {
-        m_npcs->Open(m_talk);
-        m_serviceMessage.clear();
-        ClearInput();
-        return;
-    }
-    BoardShip();
-}
-
-void Prototype::Move(double dx, double dz)
-{
-    auto& position = Sailing() ? ShipActor().location : Player().location;
-    auto tryStep = [&](double x, double z)
-    {
-        if (x == 0 && z == 0)
-        {
-            return false;
-        }
-        auto next = position;
-        next.Move(x, z);
-        if (Sailing() ? (m_world.CanSail(next, m_shipHeading, EconomyRules::SailboatLength) &&
-                         m_marine->Raid().CanSail(next, m_shipHeading))
-                      : m_world.CanWalk(next))
-        {
-            position = next;
-            return true;
-        }
-        return false;
-    };
-    // Small bounded substeps plus sliding prevent tunnelling and sticky coastlines.
-    int steps = static_cast<int>(std::ceil(std::sqrt(dx * dx + dz * dz) / .12));
-    if (steps < 1)
-    {
-        return;
-    }
-    dx /= steps;
-    dz /= steps;
-    for (int i = 0; i < steps; ++i)
-    {
-        if (tryStep(dx, dz))
-        {
-            m_moving = true;
-        }
-        else
-        {
-            const bool x = tryStep(dx, 0), z = tryStep(0, dz);
-            m_moving = m_moving || x || z;
-        }
+        m_monsters->Attack(Player().location, aim, m_combat.Damage());
     }
 }
 
@@ -376,146 +220,121 @@ void Prototype::Update(double dt, int width, int height)
         m_frameAverage += (dt - m_frameAverage) * .05;
     }
     dt = (std::max)(0.0, (std::min)(dt, .05));
-    m_time += static_cast<float>(dt);
-    m_messageTime = (std::max)(0.f, m_messageTime - static_cast<float>(dt));
-    // Covers the inverse isometric viewport, with a margin for scenery and camera lag.
-    const int radius = static_cast<int>(std::ceil((width * .354 + height * .613) / (m_zoom * ChunkSize))) + 1;
+    const float frameDt = static_cast<float>(dt);
+    m_time += frameDt;
+    const int radius = LoadRadius(m_zoom);
     m_world.Update(overview ? IslandTestMap::Center() : ActivePosition(), radius);
-    m_levelOne.SetActive(true);
-    m_levelOne.SetActiveRegion(
-        [this](Vec3 position)
+    m_combat.SetActiveRegion(
+        [this](const WorldPosition& point)
         {
-            WorldPosition point;
-            point.x = point.z = 0;
-            point.Move(position.x, position.z);
             return m_world.IsActive(point);
         });
-    double horizontal = (m_keys['d'] ? 1.0 : 0) - (m_keys['a'] ? 1.0 : 0);
-    double vertical = (m_keys['s'] ? 1.0 : 0) - (m_keys['w'] ? 1.0 : 0);
-    if (overview || PlayerPanelOpen() || (Aboard() && m_marine->Captured()))
-    {
-        horizontal = vertical = 0;
-    }
-    const double length = std::sqrt(horizontal * horizontal + vertical * vertical);
-    m_moving = false;
-    if (length > 0)
-    {
-        horizontal /= length;
-        vertical /= length;
-        double dx = (horizontal + vertical) * .70710678118;
-        double dz = (-horizontal + vertical) * .70710678118;
-        m_fishing = false;
-        if (m_playerMode == PlayerMode::Deck || m_playerMode == PlayerMode::PirateDeck)
-        {
-            const auto local = ShipDeck::ToLocal({float(dx), 0, float(dz)}, CurrentDeckHeading());
-            const auto previous = m_deckPosition;
-            const auto moveDeck = m_playerMode == PlayerMode::PirateDeck ? PirateDeck::Move : ShipDeck::Move;
-            moveDeck(
-                m_deckPosition,
-                local.x * 3.6f * static_cast<float>(dt),
-                local.z * 3.6f * static_cast<float>(dt));
-            m_deckFacing = std::atan2(local.x, -local.z);
-            m_moving = std::hypot(previous.x - m_deckPosition.x, previous.z - m_deckPosition.z) > .001f;
-        }
-        else
-        {
-            if (!m_levelOne.Attacking())
-            {
-                m_heading = static_cast<float>(std::atan2(dx, -dz));
-            }
-            if (Sailing() && m_world.CanSail(ShipActor().location, m_heading, EconomyRules::SailboatLength) &&
-                m_marine->Raid().CanSail(ShipActor().location, m_heading))
-            {
-                m_shipHeading = m_heading;
-            }
-            const double speed = (Sailing() ? 7.5 : 3.6) * (m_keys[' '] ? 1.8 : 1);
-            Move(dx * speed * dt, dz * speed * dt);
-        }
-    }
-    SyncBoardedPlayer();
-    WorldPosition origin;
-    origin.x = origin.z = 0;
-    const auto* playerIsland = m_world.CurrentIsland(Player().location);
-    const auto islandLocal =
-        playerIsland ? Player().location.RelativeTo(playerIsland->Info().center) : Vec3{};
-    const bool village = playerIsland && playerIsland->Village(islandLocal.x, islandLocal.z);
-    m_levelOne.BeginFrame(
-        overview ? 0 : static_cast<float>(dt),
-        Player().location.RelativeTo(origin),
-        Aboard(),
-        village);
+    m_player.UpdateMovement(frameDt, overview || m_ui.PlayerPanelOpen());
+    const auto* island = m_world.CurrentIsland(Player().location);
+    const auto local = island ? Player().location.RelativeTo(island->Info().center) : Vec3{};
+    const bool village = island && island->Village(local.x, local.z);
+    m_combat.BeginFrame(overview ? 0 : frameDt, Player().location, village);
     RaidPlayer raidPlayer;
-    raidPlayer.deck = m_deckPosition;
-    raidPlayer.ownDeck = m_playerMode == PlayerMode::Deck || Sailing();
+    raidPlayer.deck = m_player.DeckPosition();
+    raidPlayer.ownDeck = m_player.Mode() == PlayerMode::Deck || Sailing();
     const bool captured = m_marine->Captured();
     if (!overview &&
-        m_marine->Update(static_cast<float>(dt), ShipActor().location, Aboard(), m_shipHeading, raidPlayer))
+        m_marine->Update(frameDt, ShipActor().location, Aboard(), m_player.ShipHeading(), raidPlayer))
     {
         const auto notice = m_marine->Notice();
         if (m_marine->Raid().Failed())
         {
-            m_levelOne.Die();
+            m_combat.Die();
         }
         Reset();
-        m_message = notice;
-        m_messageTime = 8;
+        m_player.Notify(notice, 8);
         m_world.Update(ActivePosition(), radius);
     }
     if (Aboard() && captured != m_marine->Captured())
     {
-        m_cargoOpen = false;
-        CloseServiceMenu();
-        m_fishing = false;
+        m_ui.CloseAll();
+        m_player.StopFishing();
         ClearInput();
     }
     if (!overview)
     {
-        UpdateFishing(static_cast<float>(dt));
+        m_player.UpdateFishing(frameDt, m_ui.PlayerPanelOpen());
     }
-
-    SyncBoardedPlayer();
-    m_monsters
-        ->Update(static_cast<float>(dt), Player().location, !Aboard() && m_levelOne.Health() > 0, overview);
+    m_player.SyncBoardedPlayer();
+    m_monsters->Update(frameDt, Player().location, !Aboard() && m_combat.Health() > 0, overview);
     m_npcs->Update(
-        static_cast<float>(dt),
+        frameDt,
         Player().location,
         Aboard(),
         ShipActor().location,
-        Aboard() ? m_shipHeading : m_heading,
+        Aboard() ? m_player.ShipHeading() : m_player.Heading(),
         overview);
-    m_scene.Update(overview ? 0 : static_cast<float>(dt));
-    if (m_levelOne.EndFrame())
+    m_scene.Update(overview ? 0 : frameDt);
+    if (m_combat.EndFrame())
     {
         Reset();
     }
-    const auto active = ActivePosition();
-    const Vec3 distance = active.RelativeTo(m_camera);
+    const auto distance = ActivePosition().RelativeTo(m_camera);
     const double follow = 1 - std::exp(-8 * dt);
     if (!overview)
     {
         m_camera.Move(distance.x * follow, distance.z * follow);
     }
+    m_ui.SetView(width, height, m_camera, overview, m_testIsland, m_frameAverage);
 }
 
 void Prototype::Render(Renderer& r)
 {
+    const bool overview = m_world.IsTestMap() && m_testOverview;
+    m_ui.SetView(r.Width(), r.Height(), m_camera, overview, m_testIsland, m_frameAverage);
     PrepareActors();
     m_marine->Prepare(m_camera, ShipActor().location);
-    const bool overview = m_world.IsTestMap() && m_testOverview;
-    m_monsters->Prepare(m_camera, !overview && !PlayerPanelOpen());
-    m_npcs->Prepare(m_camera, !overview && !PlayerPanelOpen());
+    m_monsters->Prepare(m_camera, !overview && !m_ui.PlayerPanelOpen());
+    m_npcs->Prepare(m_camera, !overview && !m_ui.PlayerPanelOpen());
     r.SetSceneLight(m_marine->Light());
-    r.SetPostProcessing(m_postSettings);
+    r.SetPostProcessing(m_ui.PostSettings());
     r.Begin(m_zoom);
     m_world.Prepare(m_camera, m_time, m_grid);
-    WorldPosition origin;
-    origin.x = 0;
-    origin.z = 0;
-    m_levelOne.Prepare(origin.RelativeTo(m_camera), m_hud && !m_postHud && !PlayerPanelOpen() && !overview);
+    m_combat.Prepare(m_camera, m_ui.ShowCombatHud());
     m_scene.Render(r);
     r.BeginOverlay();
     m_scene.Overlay(r);
-    // Modal windows cover all world nameplates, including streamed actors created later.
     m_uiScene.Overlay(r);
     r.End();
+}
+
+void Prototype::SummonSeaThreat(SeaEncounter kind)
+{
+    if (m_player.Mode() == PlayerMode::PirateDeck)
+    {
+        m_player.Notify("내 배로 돌아온 뒤 해상 소환을 이용하세요.", 4);
+        return;
+    }
+    if (!Aboard() || !m_state.economy.HasShip())
+    {
+        Diagnostics::Get().Event("marine_force_rejected reason=not_aboard");
+        m_player.Notify("해상 소환은 배에 승선한 상태에서 이용하세요. O: 토네이도 / P: 크라켄", 5);
+        return;
+    }
+    if (m_ui.PlayerPanelOpen() || !m_marine->ForceStart(kind, ShipActor().location))
+    {
+        m_player.Notify("선박 주변의 바다 로딩이 끝나면 다시 소환하세요.", 4);
+        return;
+    }
+    m_player.StopFishing();
+    m_scene.Get<SlashActor>(m_deckSlash)->Stop();
+    ClearInput();
+    m_player.Notify(m_marine->Notice(), 6);
+}
+
+void Prototype::DebugSeaThreat(int kind)
+{
+#ifdef _DEBUG
+    if (Aboard() && !m_ui.PlayerPanelOpen() && kind >= 1 && kind <= 3)
+    {
+        SummonSeaThreat(static_cast<SeaEncounter>(kind));
+    }
+#else
+    (void)kind;
+#endif
 }

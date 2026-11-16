@@ -1,5 +1,5 @@
 #pragma once
-#include "Renderer.h"
+#include <string>
 #include <array>
 #include <cstdint>
 
@@ -58,6 +58,10 @@ struct ItemDefinition
 namespace ItemCatalog
 {
     constexpr unsigned Count = static_cast<unsigned>(InventoryItem::Count);
+    constexpr unsigned TradeBegin = static_cast<unsigned>(InventoryItem::TradeBase);
+    constexpr unsigned MaterialBegin = static_cast<unsigned>(InventoryItem::MonsterBase);
+    constexpr unsigned TradeCount = MaterialBegin - TradeBegin;
+    constexpr unsigned MaterialCount = static_cast<unsigned>(InventoryItem::SailorSword) - MaterialBegin;
     const ItemDefinition& Get(InventoryItem item);
     InventoryItem MonsterMaterial(unsigned species);
     InventoryItem Trade(unsigned good);
@@ -72,13 +76,3 @@ struct DropEntry
 };
 
 std::array<DropEntry, 3> MonsterDrops(unsigned species, bool epic);
-
-class InventoryIcons
-{
-public:
-    InventoryIcons();
-    const Mesh& Get(ItemIcon icon) const;
-
-private:
-    std::array<Mesh, static_cast<unsigned>(ItemIcon::Count)> m_icons;
-};

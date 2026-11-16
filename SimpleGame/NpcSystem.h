@@ -2,6 +2,7 @@
 #include "World.h"
 #include "PlayerEconomy.h"
 #include "NpcDialogue.h"
+#include "NpcState.h"
 
 struct NpcSelection
 {
@@ -13,7 +14,7 @@ struct NpcSelection
 class NpcSystem
 {
 public:
-    NpcSystem(SceneGraph& scene, World& world, PlayerEconomy& economy);
+    NpcSystem(SceneGraph& scene, World& world, PlayerEconomy& economy, NpcState& relations);
     ~NpcSystem();
     void SetActive(bool active);
     void Update(
@@ -35,8 +36,9 @@ public:
 
     std::string Name(const NpcKey& key) const;
     static const char* Role(unsigned role);
-    static const char* Quest(unsigned role);
+    static std::string Quest(unsigned role);
     int Progress(const NpcSelection& selection) const;
+    bool VillageNpcActive(const NpcKey& key) const;
 
     void SetDialogueProvider(NpcDialogue::Provider provider)
     {
@@ -48,8 +50,8 @@ private:
     {
         std::shared_ptr<const IslandLayout> layout;
         ActorId root = NoActor;
-        std::array<ActorId, 3> actors;
-        std::array<Vec3, 3> positions;
+        std::array<ActorId, NpcRole::Count> actors;
+        std::array<Vec3, NpcRole::Count> positions;
         bool seen = false;
     };
 
@@ -68,8 +70,9 @@ private:
     SceneGraph& m_scene;
     World& m_world;
     PlayerEconomy& m_economy;
+    NpcState& m_relations;
     ActorId m_root;
-    std::array<CachedMesh, 3> m_models;
+    std::array<CachedMesh, NpcRole::Count> m_models;
     std::array<Follower, 5> m_followers;
     std::map<IslandKey, Resident> m_residents;
     NpcDialogue m_dialogue;

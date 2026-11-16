@@ -1,6 +1,6 @@
 #pragma once
 #include "MapCatalog.h"
-#include "Renderer.h"
+#include "GeometryTypes.h"
 #include <array>
 
 enum class MonsterForm
@@ -55,7 +55,7 @@ struct MonsterDefinition
 
 namespace MonsterCatalog
 {
-    constexpr unsigned Count = 40;
+    constexpr unsigned Count = 40, SlotsPerIsland = 5;
     const MonsterDefinition& Get(unsigned id);
     unsigned ForIsland(IslandShape shape, unsigned slot);
 }
@@ -71,15 +71,3 @@ namespace MonsterPreviewRules
     constexpr float NormalAggro = 12, EpicAggro = 13;
     constexpr float RespawnTime = 25, CoarseInterval = .25f, DetailedRadius = 24;
 }
-
-class MonsterMeshes
-{
-public:
-    MonsterMeshes();
-    CachedMesh Get(unsigned id);
-    CachedMesh warning, epicRing;
-
-private:
-    std::array<CachedMesh, MonsterCatalog::Count> m_models;
-    std::array<bool, MonsterCatalog::Count> m_ready = {};
-};

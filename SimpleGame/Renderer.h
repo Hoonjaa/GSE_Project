@@ -1,36 +1,13 @@
 #pragma once
 #include "Dependencies/glew.h"
 #include "PostProcessing.h"
+#include "GeometryTypes.h"
 #include "RenderStatistics.h"
 #include <vector>
 #include <string>
 #include <memory>
 #include <map>
 #include <utility>
-
-struct Vec3
-{
-    float x, y, z;
-};
-
-struct Color
-{
-    float r, g, b;
-};
-
-struct Vec2
-{
-    float x, y;
-};
-
-struct Vertex
-{
-    Vec3 position;
-    Color color;
-    Vec2 uv = {-1, -1};
-};
-
-using Mesh = std::vector<Vertex>;
 
 // Immutable geometry shared by instances; GPU storage belongs to the renderer.
 class CachedMesh

@@ -124,6 +124,16 @@
 - 측정: 빌드·게임 실행·화면 확인은 사용자 담당. 이번 수치는 설계 상한이며 FPS/메모리 개선 결과를 측정한 것은 아님. 비교 권장: 빈 가방/16칸/다음 페이지, NPC 대화/영입, 처치·드랍 다수, T 왕복과 원거리 청크 해제.
 - 상세 및 사용자 확인 절차: NPC_INVENTORY_IMPLEMENTATION_REPORT.md.
 
+## 2026-10-29 입력·좌표·책임 분리
+
+- 이전 EnemyActor/DropActor와 사용하지 않는 모델 10개 생성·보관을 제거. 현재 효과만 CombatEffects/CombatMeshes로 유지하고 슬래시를 파일/메모리 캐시에 등록.
+- 전투 효과는 WorldPosition을 보관해 카메라 준비 시 근처 좌표로 변환. 시작 섬/원점 전역 float 경로와 어댑터의 불필요한 초기 경로장 생성 제거.
+- Prototype은 11개 구현 파일에서 3개로 축소. PlayerController/GameUi/NpcState가 실제 상태·규칙을 소유하고, 맵별 GameState 스냅샷으로 함께 복원.
+- 공통 생성 함수로 일반/테스트 맵의 해적 피격 로그 경로 통일. 프레임/FPS/Draw Call·업로드·캐시·청크 로그 유지.
+- 검증: 정적 등록·경로·참조·포맷 점검. 회귀 검사 소스 추가, 컴파일/실행은 미실시. FPS/메모리/Draw Call 개선 수치 미측정.
+- 다음 측정: 초기 생성 자산/CPU 시간, 반복 T 전환의 상태/Actor 안정성, 원거리 전투 효과 표시, SceneGraph 정리 함수 비용. 관련 정책은 측정 전 변경하지 않음.
+- 상세: REFACTOR_REPORT_2026-10-29.md / REFACTOR_TESTS.md.
+
 ## 다음 분석 기록 형식
 
 - 날짜 / 변경 내용 / 실행 세션 폴더:

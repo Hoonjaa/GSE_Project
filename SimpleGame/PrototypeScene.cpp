@@ -245,7 +245,7 @@ void Prototype::CreateActors()
     auto& hud = m_uiScene.Create<CallbackActor>(NoActor, "게임 HUD");
     hud.overlay = [this](Renderer& renderer, const ActorTransform&)
     {
-        RenderHud(renderer);
+        m_ui.RenderHud(renderer);
     };
 }
 
@@ -253,8 +253,8 @@ void Prototype::PrepareActors()
 {
     auto& ship = ShipActor();
     ship.Prepare(m_camera);
-    ship.transform.rotation = m_shipHeading;
-    ship.visible = m_economy.HasShip() && m_world.IsActive(ship.location);
+    ship.transform.rotation = m_player.ShipHeading();
+    ship.visible = m_state.economy.HasShip() && m_world.IsActive(ship.location);
     ship.enabled = ship.visible;
     const float shipScale = EconomyRules::SailboatLength / 3.85f;
     m_scene.Get<ScaledMeshActor>(m_shipBody)->scale = {shipScale, shipScale, shipScale};
@@ -267,24 +267,24 @@ void Prototype::PrepareActors()
     ship.transform.position.y = bob;
     m_scene.Find(m_shadow)->transform.position.y = -bob;
     m_scene.Find(m_wake)->transform.position.y = -bob;
-    m_scene.Find(m_wake)->visible = Sailing() && m_moving;
+    m_scene.Find(m_wake)->visible = Sailing() && m_player.Moving();
 
     auto& player = Player();
     if (Aboard())
     {
-        player.transform.position = m_deckPosition;
-        player.transform.rotation = m_deckFacing;
+        player.transform.position = m_player.DeckPosition();
+        player.transform.rotation = m_player.DeckFacing();
     }
     else
     {
         player.Prepare(m_camera);
-        player.transform.rotation = m_heading;
+        player.transform.rotation = m_player.Heading();
     }
     player.visible = true;
     m_scene.Find(m_playerMarker)->transform.position.y = Aboard() ? .02f : .58f;
     m_scene.Find(m_playerBody)->transform.position.y =
-        (Aboard() ? .03f : .58f) + (m_moving ? .035f * std::abs(std::sin(m_time * 12)) : 0);
-    m_scene.Find(m_fishingRod)->visible = m_fishing;
+        (Aboard() ? .03f : .58f) + (m_player.Moving() ? .035f * std::abs(std::sin(m_time * 12)) : 0);
+    m_scene.Find(m_fishingRod)->visible = m_player.Fishing();
 
     auto* harbor = m_scene.Get<WorldActor>(m_harbor);
     harbor->Prepare(m_camera);

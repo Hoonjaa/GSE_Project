@@ -330,6 +330,33 @@ void MonsterSystem::SetActive(bool active)
     }
 }
 
+MonsterPopulation MonsterSystem::Population(IslandKey island) const
+{
+    MonsterPopulation result;
+    const auto found = m_groups.find(island);
+    if (found == m_groups.end())
+    {
+        return result;
+    }
+    const auto& group = *found->second;
+    for (const auto id : group.monsters)
+    {
+        const auto* monster = m_scene.Get<MonsterActor>(id);
+        if (!monster)
+        {
+            continue;
+        }
+        ++result.spawned;
+        if (monster->health > 0)
+        {
+            ++result.alive;
+            result.epicAlive += monster->definition.epic;
+            result.active += m_world.IsActive(Position(group, monster->transform.position));
+        }
+    }
+    return result;
+}
+
 void MonsterSystem::Prepare(const WorldPosition& camera, bool showStatus)
 {
     for (auto& item : m_groups)

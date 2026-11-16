@@ -1,11 +1,12 @@
 #pragma once
 #include "SceneGraph.h"
 #include "WorldPosition.h"
-#include "LevelOneTerrain.h"
+#include "IslandTerrainAdapter.h"
 #include <deque>
 #include <map>
 #include <set>
 #include <utility>
+#include <vector>
 
 struct IslandChunk
 {
@@ -47,11 +48,10 @@ public:
     bool CanSail(const WorldPosition& position, float heading, float length) const;
     bool IsActive(const WorldPosition& position) const;
     bool ConservativeSea(const WorldPosition& position, float radius) const;
-    bool TutorialActive() const;
 
-    const LevelOneTerrain& Tutorial() const
+    const IslandTerrainAdapter& StartingTerrain() const
     {
-        return m_tutorial;
+        return m_startTerrain;
     }
 
     const IslandChunk* At(const WorldPosition& position) const;
@@ -77,6 +77,7 @@ public:
 
     size_t VisibleChunks() const;
     bool WasVisited(IslandKey key) const;
+    std::vector<const IslandLayout*> IslandLayouts() const;
 
 private:
     struct ResidentIsland
@@ -103,7 +104,7 @@ private:
     SceneGraph& m_scene;
     ActorId m_root = NoActor, m_ocean = NoActor, m_chunksRoot = NoActor;
     std::shared_ptr<IslandLayout> m_start;
-    LevelOneTerrain m_tutorial;
+    IslandTerrainAdapter m_startTerrain;
     CachedMesh m_house, m_palm, m_pier;
     std::map<Key, IslandChunk> m_chunks;
     std::map<IslandKey, ResidentIsland> m_islands;

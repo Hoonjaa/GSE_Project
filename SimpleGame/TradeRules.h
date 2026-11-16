@@ -1,12 +1,6 @@
 #pragma once
-#include "PlayerEconomy.h"
-
-class PrototypeTradePricing : public TradePricing
-{
-public:
-    TradeQuote Buy(IslandShape market, TradeGood item, int affinity) const override;
-    TradeQuote Sell(IslandShape market, TradeGood item, int affinity) const override;
-};
+#include "ItemCatalog.h"
+#include "MapCatalog.h"
 
 namespace TradeRules
 {

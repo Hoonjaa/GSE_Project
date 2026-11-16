@@ -1,12 +1,17 @@
 #pragma once
-#include "IslandLayout.h"
+#include "IslandKey.h"
 #include <array>
 #include <string>
+
+namespace NpcRole
+{
+    constexpr unsigned Hunter = 0, Collector = 1, Merchant = 2, Count = 3;
+}
 
 struct NpcKey
 {
     IslandKey island;
-    unsigned role = 0;
+    unsigned role = NpcRole::Hunter;
 
     bool operator<(const NpcKey& other) const
     {

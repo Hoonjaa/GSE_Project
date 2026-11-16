@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "Prototype.h"
+#include "GameUi.h"
 #include <algorithm>
 #include <cmath>
 
@@ -114,7 +114,7 @@ namespace
     };
 }
 
-std::vector<InventoryItem> Prototype::BagItems() const
+std::vector<InventoryItem> GameUi::BagItems() const
 {
     std::vector<InventoryItem> result;
     for (unsigned i = 0; i < ItemCatalog::Count; ++i)
@@ -128,7 +128,7 @@ std::vector<InventoryItem> Prototype::BagItems() const
     return result;
 }
 
-void Prototype::ToggleInventory()
+void GameUi::ToggleInventory()
 {
     if (m_inventoryOpen)
     {
@@ -141,11 +141,11 @@ void Prototype::ToggleInventory()
     m_inventoryOpen = true;
     m_inventorySelection = 0;
     m_serviceMessage.clear();
-    m_fishing = false;
+    m_player.StopFishing();
     ClearInput();
 }
 
-void Prototype::InventoryKey(unsigned char key)
+void GameUi::InventoryKey(unsigned char key)
 {
     if (key == 27)
     {
@@ -187,14 +187,14 @@ void Prototype::InventoryKey(unsigned char key)
     if (key == 13 || key == 'e')
     {
         m_serviceMessage = m_economy.Equip(items[m_inventorySelection]).message;
-        m_levelOne.EquipmentChanged();
+        m_combat.EquipmentChanged();
         const auto remaining = BagItems();
         m_inventorySelection =
             remaining.empty() ? 0 : (std::min)(m_inventorySelection, unsigned(remaining.size() - 1));
     }
 }
 
-bool Prototype::PanelClick(int x, int y)
+bool GameUi::PanelClick(int x, int y)
 {
     if (!m_inventoryOpen)
     {
@@ -222,7 +222,7 @@ bool Prototype::PanelClick(int x, int y)
         if (layout.Gear(slot).Contains(x, y))
         {
             m_serviceMessage = m_economy.Unequip(static_cast<EquipSlot>(slot)).message;
-            m_levelOne.EquipmentChanged();
+            m_combat.EquipmentChanged();
             return true;
         }
     }
@@ -231,19 +231,19 @@ bool Prototype::PanelClick(int x, int y)
         InventoryKey(13);
         return true;
     }
-    for (unsigned i = 0; i < m_economy.Companions().size(); ++i)
+    for (unsigned i = 0; i < m_relations.Companions().size(); ++i)
     {
         if (layout.Dismiss(i).Contains(x, y))
         {
-            const auto key = m_economy.Companions()[i];
-            m_serviceMessage = m_economy.Dismiss(key).message;
+            const auto key = m_relations.Companions()[i];
+            m_serviceMessage = m_relations.Dismiss(key).message;
             return true;
         }
     }
     return true;
 }
 
-void Prototype::RenderInventory(Renderer& r) const
+void GameUi::RenderInventory(Renderer& r) const
 {
     if (!m_inventoryOpen)
     {
@@ -328,27 +328,27 @@ void Prototype::RenderInventory(Renderer& r) const
     r.Text(
         x + w * .65f,
         y + h - 176,
-        "공격 " + std::to_string(m_levelOne.Damage()) + " / 방어 " +
+        "공격 " + std::to_string(m_combat.Damage()) + " / 방어 " +
             std::to_string(m_economy.EquipmentDefence()) + " / 최대 체력 " +
-            std::to_string(m_levelOne.MaxHealth()),
+            std::to_string(m_combat.MaxHealth()),
         Ink,
         1.2f,
         w * .3f);
     r.Text(
         x + w * .65f,
         y + h - 140,
-        "동료 " + std::to_string(m_economy.Companions().size()) + "/" +
+        "동료 " + std::to_string(m_relations.Companions().size()) + "/" +
             std::to_string(EconomyRules::CompanionCapacity),
         Ink,
         1.2f);
-    for (unsigned i = 0; i < m_economy.Companions().size(); ++i)
+    for (unsigned i = 0; i < m_relations.Companions().size(); ++i)
     {
         const auto button = layout.Dismiss(i);
         r.Panel(button.x, button.y, button.w, button.h, Border);
         r.Text(
             button.x + 6,
             button.y + 5,
-            m_npcs->Name(m_economy.Companions()[i]) + " · 해제",
+            m_npcs->Name(m_relations.Companions()[i]) + " · 해제",
             Paper,
             1.05f,
             button.w - 12);

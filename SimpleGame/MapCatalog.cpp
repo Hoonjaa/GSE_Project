@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "MapCatalog.h"
-#include "TradeRules.h"
 #include <stdexcept>
 
 namespace
@@ -105,18 +104,4 @@ bool MapCatalog::IsSpecialty(IslandShape shape, TradeGood good)
         }
     }
     return false;
-}
-
-std::array<MarketOffer, 32> MapCatalog::Offers(IslandShape shape, int affinity)
-{
-    const PrototypeTradePricing pricing;
-    std::array<MarketOffer, 32> result;
-    for (size_t i = 0; i < result.size(); ++i)
-    {
-        result[i].good = static_cast<TradeGood>(i);
-        result[i].localSpecialty = IsSpecialty(shape, result[i].good);
-        result[i].buy = pricing.Buy(shape, result[i].good, affinity);
-        result[i].sell = pricing.Sell(shape, result[i].good, affinity);
-    }
-    return result;
 }

@@ -14,6 +14,7 @@ but WITHOUT ANY WARRANTY.
 #include "Prototype.h"
 #include "FrameProfiler.h"
 #include "Diagnostics.h"
+#include "MonitorServer.h"
 #include <chrono>
 #include <iostream>
 #include <memory>
@@ -25,6 +26,18 @@ namespace
     std::unique_ptr<Prototype> game;
     std::uint32_t previousTick = 0;
     FrameProfiler frameProfiler;
+    MonitorServer monitor;
+    std::chrono::steady_clock::time_point nextMonitorSample;
+
+    void UpdateMonitor()
+    {
+        const auto now = std::chrono::steady_clock::now();
+        if (monitor.Running() && now >= nextMonitorSample)
+        {
+            monitor.Publish(game->MonitorSnapshot());
+            nextMonitorSample = now + std::chrono::seconds(1);
+        }
+    }
 
     void RenderScene()
     {
@@ -49,6 +62,7 @@ namespace
 
     void Close()
     {
+        monitor.Stop();
         // Free GPU objects while this window's OpenGL context is still current.
         game.reset();
         renderer.reset();
@@ -68,6 +82,7 @@ namespace
         frameProfiler.RecordUpdate(
             std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - updateStart)
                 .count());
+        UpdateMonitor();
         glutPostRedisplay();
         glutTimerFunc(16, Tick, 0);
     }
@@ -175,11 +190,12 @@ int main(int argc, char** argv)
     while (glGetError() != GL_NO_ERROR)
     {
     }
-    std::cout << "OpenGL: " << glGetString(GL_VERSION) << "\n"
-              << "WASD: move | Space: boost | E: board/helm/land | F: upgrade/fish | I: cargo\n"
-              << "O: summon tornado | P: summon kraken | B: post processing\n"
-              << "T: test map | Test map: F1-F8 islands, Y overview/detail\n"
-              << "G: chunk grid | H: HUD | R: return home | Escape: exit\n";
+    std::cout
+        << "OpenGL: " << glGetString(GL_VERSION) << "\n"
+        << "WASD: move | Space: boost | E: board/helm/land | F: upgrade/fish | I: inventory | K: cargo\n"
+        << "O: summon tornado | P: summon kraken | B: post processing\n"
+        << "T: test map | Test map: F1-F8 islands, Y overview/detail\n"
+        << "G: chunk grid | H: HUD | R: return home | Escape: exit\n";
     auto glInfo = [](GLenum name)
     {
         const auto* value = glGetString(name);
@@ -199,6 +215,8 @@ int main(int argc, char** argv)
     game.reset(new Prototype());
     Diagnostics::Get().Event("terrain_seed=" + std::to_string(game->TerrainSeed()));
     game->Update(0, 1280, 800);
+    monitor.Start();
+    UpdateMonitor();
     glutDisplayFunc(RenderScene);
     glutReshapeFunc(Resize);
     glutKeyboardFunc(KeyDown);
@@ -213,6 +231,7 @@ int main(int argc, char** argv)
     previousTick = static_cast<std::uint32_t>(glutGet(GLUT_ELAPSED_TIME));
     glutTimerFunc(16, Tick, 0);
     glutMainLoop();
+    monitor.Stop();
     // Close callback released the renderer before the window was destroyed.
     return 0;
 }

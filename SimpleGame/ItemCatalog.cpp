@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "ItemCatalog.h"
 #include "MapCatalog.h"
+#include "MonsterCatalog.h"
 #include <stdexcept>
 
 namespace
@@ -14,8 +15,16 @@ namespace
         "맨드레이크 뿌리", "정령 꽃잎",      "나비 날개",      "독버섯 포자",  "수호 꽃술",
         "늪 도마뱀 비늘",  "슬라임 방울",    "개구리 가죽",    "수초 줄기",    "심연의 핵",
         "성게 가시",       "암초 게 껍질",   "바다뱀 비늘",    "하피 깃털",    "포식자 이빨"};
-    const int Prices[32] = {5,  8,  10, 7, 35, 8,  4,  10, 12, 16, 18, 14, 22, 18, 20, 28,
-                            18, 16, 40, 9, 8,  30, 12, 15, 6,  10, 12, 24, 14, 16, 38, 12};
+    const int Prices[ItemCatalog::TradeCount] = {5,  8,  10, 7,  35, 8,  4,  10, 12, 16, 18,
+                                                 14, 22, 18, 20, 28, 18, 16, 40, 9,  8,  30,
+                                                 12, 15, 6,  10, 12, 24, 14, 16, 38, 12};
+
+    static_assert(
+        sizeof(Materials) / sizeof(Materials[0]) == ItemCatalog::MaterialCount,
+        "Every monster material must have a name");
+    static_assert(
+        ItemCatalog::MaterialCount == MonsterCatalog::Count,
+        "Material and monster catalogs must agree");
 
     std::array<ItemDefinition, ItemCatalog::Count> Build()
     {
@@ -24,30 +33,41 @@ namespace
         items[1] = {"보스 산호 전리품", 20, 20, EquipSlot::None, ItemIcon::Material};
         items[2] = {"물고기", 2, 20, EquipSlot::None, ItemIcon::Fish};
         items[3] = {"크라켄 촉수", 40, 20, EquipSlot::None, ItemIcon::Tentacle};
-        for (unsigned i = 0; i < 32; ++i)
+        for (unsigned i = 0; i < ItemCatalog::TradeCount; ++i)
         {
-            items[4 + i] = {
+            items[ItemCatalog::TradeBegin + i] = {
                 MapCatalog::GoodName(static_cast<TradeGood>(i)),
                 Prices[i],
                 20,
                 EquipSlot::None,
                 ItemIcon::Trade};
         }
-        for (unsigned i = 0; i < 40; ++i)
+        for (unsigned i = 0; i < ItemCatalog::MaterialCount; ++i)
         {
-            const bool epic = i % 5 == 4;
-            items[36 + i] = {Materials[i], epic ? 35 : 8, epic ? 5 : 30, EquipSlot::None, ItemIcon::Material};
+            const bool epic = i % MonsterCatalog::SlotsPerIsland == MonsterCatalog::SlotsPerIsland - 1;
+            items[ItemCatalog::MaterialBegin + i] =
+                {Materials[i], epic ? 35 : 8, epic ? 5 : 30, EquipSlot::None, ItemIcon::Material};
         }
-        items[76] = {"선원 커틀러스", 25, 1, EquipSlot::Weapon, ItemIcon::Sword, 4, 0, 0};
-        items[77] = {"강철 커틀러스", 80, 1, EquipSlot::Weapon, ItemIcon::Sword, 10, 0, 0};
-        items[78] = {"선원 모자", 12, 1, EquipSlot::Head, ItemIcon::Head, 0, 1, 5};
-        items[79] = {"가죽 모자", 35, 1, EquipSlot::Head, ItemIcon::Head, 0, 3, 12};
-        items[80] = {"선원 상의", 18, 1, EquipSlot::Body, ItemIcon::Body, 0, 2, 8};
-        items[81] = {"가죽 갑옷", 50, 1, EquipSlot::Body, ItemIcon::Body, 0, 5, 20};
-        items[82] = {"선원 하의", 15, 1, EquipSlot::Legs, ItemIcon::Legs, 0, 1, 6};
-        items[83] = {"가죽 하의", 40, 1, EquipSlot::Legs, ItemIcon::Legs, 0, 3, 15};
-        items[84] = {"무기 강화석", 10, 50, EquipSlot::None, ItemIcon::Stone};
-        items[85] = {"훈련용 검", 0, 1, EquipSlot::Weapon, ItemIcon::Sword, 0, 0, 0};
+        items[static_cast<unsigned>(InventoryItem::SailorSword)] =
+            {"선원 커틀러스", 25, 1, EquipSlot::Weapon, ItemIcon::Sword, 4, 0, 0};
+        items[static_cast<unsigned>(InventoryItem::SteelSword)] =
+            {"강철 커틀러스", 80, 1, EquipSlot::Weapon, ItemIcon::Sword, 10, 0, 0};
+        items[static_cast<unsigned>(InventoryItem::ClothHat)] =
+            {"선원 모자", 12, 1, EquipSlot::Head, ItemIcon::Head, 0, 1, 5};
+        items[static_cast<unsigned>(InventoryItem::LeatherHat)] =
+            {"가죽 모자", 35, 1, EquipSlot::Head, ItemIcon::Head, 0, 3, 12};
+        items[static_cast<unsigned>(InventoryItem::SailorShirt)] =
+            {"선원 상의", 18, 1, EquipSlot::Body, ItemIcon::Body, 0, 2, 8};
+        items[static_cast<unsigned>(InventoryItem::LeatherArmor)] =
+            {"가죽 갑옷", 50, 1, EquipSlot::Body, ItemIcon::Body, 0, 5, 20};
+        items[static_cast<unsigned>(InventoryItem::SailorPants)] =
+            {"선원 하의", 15, 1, EquipSlot::Legs, ItemIcon::Legs, 0, 1, 6};
+        items[static_cast<unsigned>(InventoryItem::LeatherPants)] =
+            {"가죽 하의", 40, 1, EquipSlot::Legs, ItemIcon::Legs, 0, 3, 15};
+        items[static_cast<unsigned>(InventoryItem::UpgradeStone)] =
+            {"무기 강화석", 10, 50, EquipSlot::None, ItemIcon::Stone};
+        items[static_cast<unsigned>(InventoryItem::TrainingSword)] =
+            {"훈련용 검", 0, 1, EquipSlot::Weapon, ItemIcon::Sword, 0, 0, 0};
         return items;
     }
 }
@@ -65,20 +85,20 @@ const ItemDefinition& ItemCatalog::Get(InventoryItem item)
 
 InventoryItem ItemCatalog::MonsterMaterial(unsigned species)
 {
-    if (species >= 40)
+    if (species >= MaterialCount)
     {
         throw std::out_of_range("Monster material ID");
     }
-    return static_cast<InventoryItem>(36 + species);
+    return static_cast<InventoryItem>(MaterialBegin + species);
 }
 
 InventoryItem ItemCatalog::Trade(unsigned good)
 {
-    if (good >= 32)
+    if (good >= TradeCount)
     {
         throw std::out_of_range("Trade good ID");
     }
-    return static_cast<InventoryItem>(4 + good);
+    return static_cast<InventoryItem>(TradeBegin + good);
 }
 
 const char* ItemCatalog::SlotName(EquipSlot slot)
@@ -101,9 +121,13 @@ const char* ItemCatalog::SlotName(EquipSlot slot)
 std::array<DropEntry, 3> MonsterDrops(unsigned species, bool epic)
 {
     const unsigned slot = species % 4;
-    const unsigned gear[] = {epic ? 77u : 76u, epic ? 79u : 78u, epic ? 81u : 80u, epic ? 83u : 82u};
+    const InventoryItem gear[] = {
+        epic ? InventoryItem::SteelSword : InventoryItem::SailorSword,
+        epic ? InventoryItem::LeatherHat : InventoryItem::ClothHat,
+        epic ? InventoryItem::LeatherArmor : InventoryItem::SailorShirt,
+        epic ? InventoryItem::LeatherPants : InventoryItem::SailorPants};
     return {
         {{ItemCatalog::MonsterMaterial(species), 50, 1},
-         {static_cast<InventoryItem>(gear[slot]), 50, 1},
+         {gear[slot], 50, 1},
          {InventoryItem::UpgradeStone, 50, 1}}};
 }

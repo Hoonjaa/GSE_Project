@@ -1,10 +1,16 @@
 #pragma once
 #include "MonsterActor.h"
+#include "MonsterMeshes.h"
 #include "World.h"
 #include <map>
 #include <memory>
 #include "MonsterItemDrop.h"
 #include <random>
+
+struct MonsterPopulation
+{
+    size_t spawned = 0, alive = 0, active = 0, epicAlive = 0;
+};
 
 class MonsterSystem
 {
@@ -20,6 +26,7 @@ public:
     void SetActive(bool active);
     void Prepare(const WorldPosition& camera, bool showStatus = true);
     void Attack(const WorldPosition& player, Vec3 aim, int damage);
+    MonsterPopulation Population(IslandKey island) const;
 
 private:
     struct Group

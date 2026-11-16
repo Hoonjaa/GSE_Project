@@ -1,5 +1,5 @@
 #pragma once
-#include "Renderer.h"
+#include "GeometryTypes.h"
 #include <cstdint>
 
 // Existing engine unit/partition. Not a newly fixed game-design chunk size.

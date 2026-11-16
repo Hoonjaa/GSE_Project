@@ -1,5 +1,6 @@
 #include "stdafx.h"
-#include "LevelOne.h"
+#include "PlayerCombat.h"
+#include "UiLayout.h"
 #include <sstream>
 
 namespace
@@ -8,13 +9,14 @@ namespace
     const Color Paper = {.96f, .90f, .72f}, Ink = {.07f, .19f, .23f}, Gold = {.98f, .71f, .32f};
 }
 
-void LevelOne::Overlay(Renderer& renderer) const
+void PlayerCombat::Overlay(Renderer& renderer) const
 {
     if (!m_showHud)
     {
         return;
     }
-    renderer.Panel(20, 118, 420, 135, Ink);
+    const HudLayout layout(renderer.Width(), renderer.Height());
+    layout.stats.Draw(renderer, Ink);
     std::ostringstream stats;
     stats << "레벨 " << m_level << " / 체력 " << int(m_health) << "/" << MaxHealth() << " / 공격력 "
           << Damage();
@@ -48,24 +50,7 @@ void LevelOne::Overlay(Renderer& renderer) const
     renderer.Text(34, 234, "좌클릭 근접 공격 / 붉은 원에서 벗어나세요", Paper, 1.4f);
     if (m_noticeTime > 0)
     {
-        renderer.Panel(20, float(renderer.Height() - 246), 680, 53, Ink);
+        layout.combatNotice.Draw(renderer, Ink);
         renderer.Text(32, float(renderer.Height() - 242), m_notice, Gold, 1.6f, 650);
     }
-}
-
-void LevelOne::Map(Renderer& renderer, float left, float top, float extent, Vec3 player) const
-{
-    m_terrain.Map(renderer, left, top, extent);
-    const float scale = extent / LevelOneTerrain::Size;
-    auto marker = [&](Vec3 p, Color color, float size)
-    {
-        const float x = (p.x - m_terrain.MapOrigin()) / m_terrain.CellSize() * scale;
-        const float z = (p.z - m_terrain.MapOrigin()) / m_terrain.CellSize() * scale;
-        if (x >= 0 && z >= 0 && x < extent - size && z < extent - size)
-        {
-            renderer.Panel(left + x, top + z, size, size, color);
-        }
-    };
-    marker(m_terrain.SpawnPoint(), Gold, 5);
-    marker(player, Paper, 5);
 }

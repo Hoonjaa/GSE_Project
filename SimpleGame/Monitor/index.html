@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Uncharted 월드 모니터</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101b23;
+      --panel: #172832;
+      --line: #36505c;
+      --text: #ecf4f5;
+      --muted: #afc5cc;
+      --accent: #8de4cb;
+      --warn: #ffce91;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, sans-serif; }
+    main { max-width: 1320px; margin: auto; padding: clamp(14px, 4vw, 42px); }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: clamp(24px, 5vw, 36px); }
+    h2 { font-size: 18px; }
+    header, .section-heading { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+    .muted, small { color: var(--muted); }
+    a, .live { color: var(--accent); }
+    .warning { color: var(--warn); }
+    #connection { font-weight: 700; }
+    #sample { margin: 6px 0 16px; }
+    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 10px; }
+    .metric, section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+    .metric { padding: 12px 15px; }
+    .metric strong { display: block; font-size: 19px; overflow-wrap: anywhere; }
+    section { margin-top: 18px; padding: 14px; }
+    .table-scroll { overflow: auto; margin-top: 10px; }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { background: #203640; white-space: nowrap; }
+    td { min-width: 68px; }
+    tr[data-current="true"] { background: #203e40; }
+    td small { display: block; }
+    select { padding: 5px 8px; max-width: 100%; border: 1px solid var(--line); border-radius: 5px; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="muted">UNCHARTED</p>
+        <h1>월드 모니터</h1>
+      </div>
+      <div>
+        <span id="connection" role="status">연결 대기</span>
+        · <a href="/api/state" target="_blank" rel="noopener">JSON 열기</a>
+      </div>
+    </header>
+    <p id="sample" class="muted">게임에서 첫 상태를 기다리는 중입니다.</p>
+    <div class="metrics">
+      <div class="metric"><small>현재 맵</small><strong id="mode">—</strong></div>
+      <div class="metric"><small>플레이어 위치</small><strong id="player">—</strong></div>
+      <div class="metric"><small>로딩된 섬 / 표시 섬</small><strong id="island-count">—</strong></div>
+      <div class="metric"><small>생존 몹 / 에픽</small><strong id="monster-count">—</strong></div>
+      <div class="metric"><small>마을 NPC / 영입 동료</small><strong id="npc-count">—</strong></div>
+      <div class="metric"><small>청크 (활성 / 로딩 / 대기)</small><strong id="chunk-count">—</strong></div>
+    </div>
+
+    <section>
+      <h2>섬별 상태</h2>
+      <p class="muted">몹과 마을 NPC 수는 로딩된 섬 기준입니다. 활성은 현재 월드 활성 범위 안에 있다는 뜻입니다.</p>
+      <div class="table-scroll" tabindex="0" aria-label="섬별 상태 표">
+        <table aria-label="섬별 상태">
+          <thead><tr><th>섬</th><th>방문 / 로딩</th><th>최대 폭 / 육지·마을 면적</th><th>청크 활성 / 로딩</th><th>몹 생존 / 생성</th><th>에픽 / 활성 / 처치</th><th>NPC 활성 / 마을</th></tr></thead>
+          <tbody id="islands"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-heading">
+        <h2>NPC 상태</h2>
+        <label>섬 필터 <select id="island-filter"><option value="">전체 섬</option></select></label>
+      </div>
+      <div class="table-scroll" tabindex="0" aria-label="NPC 상태 표">
+        <table aria-label="NPC 상태">
+          <thead><tr><th>출신 섬</th><th>이름</th><th>상태</th><th>관계</th><th>의뢰</th><th>최근 기억</th></tr></thead>
+          <tbody id="npcs"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>영입 동료</h2>
+      <p class="muted">출신 섬이 로딩 범위 밖이어도 표시합니다.</p>
+      <div class="table-scroll" tabindex="0" aria-label="영입 동료 표">
+        <table aria-label="영입 동료">
+          <thead><tr><th>출신 섬</th><th>이름</th><th>상태</th><th>관계</th><th>의뢰</th><th>최근 기억</th></tr></thead>
+          <tbody id="companions"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script>
+    const $ = id => document.getElementById(id);
+    const key = island => `${island.x},${island.z}`;
+    const coordinates = island => `(${island.x}, ${island.z})`;
+    const numbers = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 });
+    const presence = { active: '마을 · 활성', resident: '마을 · 대기', companion: '영입 동료', unloaded: '미로딩' };
+    const quests = { available: '수락 가능', active: '진행 중', complete: '완료' };
+    const filter = $('island-filter');
+    let latest;
+    let filterSignature = '';
+    let filterMap;
+
+    function addRow(body, cells, isCurrent = false) {
+      const row = body.insertRow();
+      if (isCurrent) row.dataset.current = 'true';
+      for (const value of cells) {
+        const cell = row.insertCell();
+        const [main, detail] = Array.isArray(value) ? value : [value];
+        cell.textContent = main;
+        if (detail) {
+          const small = document.createElement('small');
+          small.textContent = detail;
+          cell.append(small);
+        }
+      }
+    }
+
+    function emptyRow(body, columns, message) {
+      const cell = body.insertRow().insertCell();
+      cell.colSpan = columns;
+      cell.textContent = message;
+    }
+
+    function renderNpcs(body, npcs, islandNames, emptyMessage) {
+      body.replaceChildren();
+      for (const npc of npcs) {
+        const island = islandNames.get(key(npc.home));
+        addRow(body, [
+          [island ?? '섬', coordinates(npc.home)],
+          npc.name,
+          presence[npc.presence] ?? npc.presence,
+          [`호감도 ${npc.affinity} · 신뢰 ${npc.trust} · 존중 ${npc.respect}`,
+           `공포 ${npc.fear} · 원한 ${npc.resentment}`],
+          [`${quests[npc.quest.status] ?? npc.quest.status} · ${npc.quest.progress}/${npc.quest.target}`,
+           npc.quest.objective],
+          npc.latestMemory || '—'
+        ]);
+      }
+      if (!npcs.length) emptyRow(body, 6, emptyMessage);
+    }
+
+    function renderNpcTables(state) {
+      const islands = state.islands.filter(island => !filter.value || key(island.key) === filter.value);
+      const names = new Map(state.islands.map(island => [key(island.key), island.name]));
+      renderNpcs($('npcs'), islands.flatMap(island => island.npcs), names, '표시할 섬 NPC가 없습니다.');
+      renderNpcs($('companions'), state.companions, names, '영입한 동료가 없습니다.');
+    }
+
+    function render(state) {
+      const playerIsland = state.player.island && key(state.player.island);
+      const loaded = state.islands.filter(island => island.loadedChunks > 0);
+      const total = get => loaded.reduce((sum, island) => sum + get(island), 0);
+      $('mode').textContent = state.map === 'test' ? (state.overview ? '테스트 맵 · 전경' : '테스트 맵') : '일반 월드';
+      $('player').textContent = state.player.island ? `섬 ${coordinates(state.player.island)}` : '해상 또는 섬 밖';
+      $('island-count').textContent = `${loaded.length} / ${state.islands.length}`;
+      $('monster-count').textContent = `${total(i => i.monsters.alive)} / ${total(i => i.monsters.epicAlive)}`;
+      $('npc-count').textContent = `${total(i => i.residentNpcCount)} / ${state.companions.length}`;
+      $('chunk-count').textContent = `${state.chunks.active} / ${state.chunks.loaded} / ${state.chunks.pending}`;
+
+      const table = $('islands');
+      table.replaceChildren();
+      for (const island of state.islands) {
+        const current = key(island.key) === playerIsland;
+        const m = island.monsters;
+        addRow(table, [
+          [island.name + (island.starter ? ' · 시작 섬' : ''), coordinates(island.key) + (current ? ' · 현재 위치' : '')],
+          [island.visited ? '방문함' : '미방문', island.loadedChunks ? '로딩됨' : '미로딩'],
+          [`${numbers.format(island.widthM)} m`, `${numbers.format(island.landAreaM2)} / ${numbers.format(island.villageAreaM2)} m²`],
+          `${island.activeChunks} / ${island.loadedChunks}`,
+          m ? `${m.alive} / ${m.spawned}` : '미확인',
+          m ? `${m.epicAlive} / ${m.active} / ${m.spawned - m.alive}` : '미확인',
+          island.loadedChunks ? `${island.activeNpcCount} / ${island.residentNpcCount}` : '미확인'
+        ], current);
+      }
+      if (!state.islands.length) emptyRow(table, 7, '현재 로딩된 섬이 없습니다.');
+
+      const signature = JSON.stringify(state.islands.map(island => [key(island.key), island.name]));
+      if (signature !== filterSignature || state.map !== filterMap) {
+        const selected = state.map === filterMap ? filter.value : '';
+        filter.replaceChildren(new Option('전체 섬', ''));
+        for (const island of state.islands) {
+          filter.add(new Option(`${island.name} ${coordinates(island.key)}`, key(island.key)));
+        }
+        filter.value = state.islands.some(island => key(island.key) === selected) ? selected : '';
+        filterSignature = signature;
+        filterMap = state.map;
+      }
+      renderNpcTables(state);
+    }
+
+    function connection(label, tone) {
+      const element = $('connection');
+      if (element.textContent !== label) element.textContent = label;
+      element.className = tone;
+    }
+
+    async function poll() {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2500);
+      try {
+        const response = await fetch('/api/state', { cache: 'no-store', signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const state = await response.json();
+        if (state.schemaVersion !== 1) throw new Error('지원하지 않는 JSON 버전');
+        if (!latest || state.timestampMs !== latest.timestampMs) {
+          render(state);
+          latest = state;
+          $('sample').textContent = `마지막 갱신 ${new Date(state.timestampMs).toLocaleString('ko-KR')}`;
+        }
+        const stale = Date.now() - state.timestampMs > 4000;
+        connection(stale ? '갱신 지연 · 마지막 상태 표시 중' : '연결됨', stale ? 'warning' : 'live');
+      } catch {
+        connection(latest ? '연결 끊김 · 마지막 상태 표시 중' : '게임 연결 대기', 'warning');
+      } finally {
+        clearTimeout(timeout);
+        setTimeout(poll, 1000);
+      }
+    }
+
+    filter.addEventListener('change', () => {
+      if (latest) renderNpcTables(latest);
+    });
+    poll();
+  </script>
+</body>
+</html>

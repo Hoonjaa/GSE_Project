@@ -1,11 +1,11 @@
 #include "stdafx.h"
-#include "Prototype.h"
+#include "GameUi.h"
 #include "Diagnostics.h"
 #include <algorithm>
 #include <cmath>
 #include <string>
 
-bool Prototype::CloseServiceMenu()
+bool GameUi::CloseServiceMenu()
 {
     if (m_inventoryOpen || m_talk.valid)
     {
@@ -34,7 +34,7 @@ bool Prototype::CloseServiceMenu()
     return true;
 }
 
-bool Prototype::ShipAtService() const
+bool GameUi::ShipAtService() const
 {
     if (!m_economy.HasShip() || m_service.kind != TownServiceKind::Shipyard)
     {
@@ -45,7 +45,7 @@ bool Prototype::ShipAtService() const
     return std::hypot(delta.x, delta.z) <= 3.4f;
 }
 
-void Prototype::BuySailboat()
+void GameUi::BuySailboat()
 {
     if (m_economy.HasShip() || m_economy.Gold() < EconomyRules::SailboatPrice)
     {
@@ -64,12 +64,11 @@ void Prototype::BuySailboat()
     m_serviceMessage = result.message;
     if (result.success)
     {
-        ShipActor().location = mooring;
-        m_shipHeading = heading;
+        m_player.SetShipPose(mooring, heading);
     }
 }
 
-void Prototype::ServiceKey(unsigned char key)
+void GameUi::ServiceKey(unsigned char key)
 {
     if (key == 'e' || key == 27)
     {
@@ -108,21 +107,21 @@ void Prototype::ServiceKey(unsigned char key)
     switch (key)
     {
         case '1':
-            m_serviceMessage = m_economy.Store(CoralLoot::Normal).message;
+            m_serviceMessage = m_economy.StoreItem(InventoryItem::NormalCoral).message;
             break;
         case '2':
-            m_serviceMessage = m_economy.Store(CoralLoot::Boss).message;
+            m_serviceMessage = m_economy.StoreItem(InventoryItem::BossCoral).message;
             break;
         case '3':
-            m_serviceMessage = m_economy.Unload(CoralLoot::Normal).message;
+            m_serviceMessage = m_economy.UnloadItem(InventoryItem::NormalCoral).message;
             break;
         case '4':
-            m_serviceMessage = m_economy.Unload(CoralLoot::Boss).message;
+            m_serviceMessage = m_economy.UnloadItem(InventoryItem::BossCoral).message;
             break;
     }
 }
 
-void Prototype::RenderServiceMenu(Renderer& renderer) const
+void GameUi::RenderServiceMenu(Renderer& renderer) const
 {
     if (m_inventoryOpen || m_talk.valid || m_cargoOpen || m_service.kind == TownServiceKind::None)
     {

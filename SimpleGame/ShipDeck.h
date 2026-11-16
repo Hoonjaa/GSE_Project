@@ -1,5 +1,5 @@
 #pragma once
-#include "Renderer.h"
+#include "GeometryTypes.h"
 #include "PlayerEconomy.h"
 
 enum class PlayerMode

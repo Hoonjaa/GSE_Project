@@ -1,8 +1,9 @@
 #include "stdafx.h"
-#include "Prototype.h"
+#include "GameUi.h"
 #include <algorithm>
+#include "QuestRules.h"
 
-void Prototype::NpcKeyInput(unsigned char key)
+void GameUi::NpcKeyInput(unsigned char key)
 {
     if (key == 'e' || key == 27)
     {
@@ -12,19 +13,19 @@ void Prototype::NpcKeyInput(unsigned char key)
     EconomyResult result = {false, ""};
     if (key == 'q')
     {
-        result = m_economy.AcceptQuest(m_talk.key);
+        result = m_relations.AcceptQuest(m_talk.key);
     }
     else if (key == 'c')
     {
-        result = m_economy.CompleteQuest(m_talk.key, m_talk.shape);
+        result = m_relations.CompleteQuest(m_talk.key, m_talk.shape, m_economy);
     }
     else if (key == 'r')
     {
-        result = m_economy.Recruit(m_talk.key);
+        result = m_relations.Recruit(m_talk.key, m_economy);
     }
     else if (key == 'd')
     {
-        result = m_economy.Dismiss(m_talk.key);
+        result = m_relations.Dismiss(m_talk.key);
     }
     else
     {
@@ -35,7 +36,7 @@ void Prototype::NpcKeyInput(unsigned char key)
     ClearInput();
 }
 
-void Prototype::RenderNpc(Renderer& r) const
+void GameUi::RenderNpc(Renderer& r) const
 {
     if (!m_talk.valid)
     {
@@ -56,7 +57,7 @@ void Prototype::RenderNpc(Renderer& r) const
     const float x = (r.Width() - w) * .5f, y = (r.Height() - h) * .5f;
     const Color paper = {.96f, .90f, .72f}, ink = {.07f, .19f, .23f}, gold = {.98f, .71f, .32f};
     r.Panel(x, y, w, h, ink);
-    const auto& state = m_economy.Npc(m_talk.key);
+    const auto& state = static_cast<const NpcState&>(m_relations).Npc(m_talk.key);
     r.Text(
         x + 20,
         y + 16,
@@ -78,7 +79,9 @@ void Prototype::RenderNpc(Renderer& r) const
     r.Text(
         x + 20,
         y + h - 190,
-        "진행 " + std::to_string(m_npcs->Progress(m_talk)) + "/3 · 완료 시 호감도 +10 / 선택 영입",
+        "진행 " + std::to_string(m_npcs->Progress(m_talk)) + "/" +
+            std::to_string(QuestRules::Get(m_talk.key.role).target) + " · 완료 시 호감도 +" +
+            std::to_string(QuestRules::Get(m_talk.key.role).affinityReward) + " / 선택 영입",
         paper,
         1.35f,
         w - 40);
@@ -86,7 +89,7 @@ void Prototype::RenderNpc(Renderer& r) const
     r.Text(
         x + 20,
         y + h - 116,
-        "동료 " + std::to_string(m_economy.Companions().size()) + "/" +
+        "동료 " + std::to_string(m_relations.Companions().size()) + "/" +
             std::to_string(EconomyRules::CompanionCapacity) + " · 대화 종료 후 I에서도 동료 해제 가능",
         paper,
         1.25f,

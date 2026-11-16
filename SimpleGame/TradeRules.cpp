@@ -7,7 +7,7 @@ namespace
     bool Trade(InventoryItem item)
     {
         const auto id = static_cast<unsigned>(item);
-        return id >= 4 && id < 36;
+        return id >= ItemCatalog::TradeBegin && id < ItemCatalog::MaterialBegin;
     }
 
     int Affinity(int value)
@@ -24,8 +24,9 @@ std::int64_t TradeRules::Buy(IslandShape market, InventoryItem item, int affinit
         return 0;
     }
     const bool local =
-        Trade(item) &&
-        MapCatalog::IsSpecialty(market, static_cast<TradeGood>(static_cast<unsigned>(item) - 4));
+        Trade(item) && MapCatalog::IsSpecialty(
+                           market,
+                           static_cast<TradeGood>(static_cast<unsigned>(item) - ItemCatalog::TradeBegin));
     // Exact integer fractions avoid a one-gold rounding error at decimal boundaries.
     const std::int64_t rate = Trade(item) ? (local ? 75 : 180) : 120;
     const auto numerator = base * rate * (1000 - Affinity(affinity) * 2);
@@ -40,25 +41,10 @@ std::int64_t TradeRules::Sell(IslandShape market, InventoryItem item, int affini
         return 0;
     }
     const bool local =
-        Trade(item) &&
-        MapCatalog::IsSpecialty(market, static_cast<TradeGood>(static_cast<unsigned>(item) - 4));
+        Trade(item) && MapCatalog::IsSpecialty(
+                           market,
+                           static_cast<TradeGood>(static_cast<unsigned>(item) - ItemCatalog::TradeBegin));
     const std::int64_t rate = Trade(item) ? (local ? 50 : 110) : 100;
     const auto numerator = base * rate * (1000 + Affinity(affinity) * 2);
     return (std::max)(std::int64_t(1), numerator / 100000);
-}
-
-TradeQuote PrototypeTradePricing::Buy(IslandShape market, TradeGood item, int affinity) const
-{
-    return {
-        true,
-        TradeRules::Buy(market, ItemCatalog::Trade(static_cast<unsigned>(item)), affinity),
-        "프로토타입 구매가"};
-}
-
-TradeQuote PrototypeTradePricing::Sell(IslandShape market, TradeGood item, int affinity) const
-{
-    return {
-        true,
-        TradeRules::Sell(market, ItemCatalog::Trade(static_cast<unsigned>(item)), affinity),
-        "프로토타입 판매가"};
 }

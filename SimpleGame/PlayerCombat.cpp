@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "LevelOne.h"
+#include "PlayerCombat.h"
 #include <cmath>
 #include <algorithm>
 
@@ -12,10 +12,9 @@ namespace
 
 }
 
-LevelOne::LevelOne(SceneGraph& scene, const LevelOneTerrain& terrain, PlayerEconomy& economy)
-    : m_scene(scene), m_economy(economy), m_terrain(terrain), m_context(terrain)
+PlayerCombat::PlayerCombat(SceneGraph& scene, PlayerEconomy& economy) : m_scene(scene), m_economy(economy)
 {
-    m_root = m_scene.Create<Actor>(NoActor, "레벨 1").Id();
+    m_root = m_scene.Create<Actor>(NoActor, "플레이어 전투").Id();
     m_effectsRoot = m_scene.Create<Actor>(m_root, "전투 효과").Id();
     m_slash = m_scene.Create<SlashActor>(m_effectsRoot, m_meshes.slash).Id();
     auto& hud = m_scene.Create<CallbackActor>(m_root, "레벨 상태 UI");
@@ -26,22 +25,21 @@ LevelOne::LevelOne(SceneGraph& scene, const LevelOneTerrain& terrain, PlayerEcon
     Notify("섬별 몬스터 미리보기 · 일반 4종과 에픽 1종 / 전리품·장비 자동 습득");
 }
 
-void LevelOne::Notify(const std::string& text)
+void PlayerCombat::Notify(const std::string& text)
 {
     m_notice = text;
     m_noticeTime = 5;
 }
 
-void LevelOne::Recover()
+void PlayerCombat::Recover()
 {
     m_health = float(MaxHealth());
     m_invincible = 2;
     m_sinceHit = 0;
     m_scene.Get<SlashActor>(m_slash)->Stop();
-    m_context.playerDead = false;
 }
 
-void LevelOne::Upgrade()
+void PlayerCombat::Upgrade()
 {
     if (m_economy.Equipped(EquipSlot::Weapon) < 0)
     {
@@ -64,7 +62,7 @@ void LevelOne::Upgrade()
     Notify("무기 강화 성공! +" + std::to_string(m_upgrade) + " / 공격력 " + std::to_string(Damage()));
 }
 
-void LevelOne::GainExperience(int amount)
+void PlayerCombat::GainExperience(int amount)
 {
     if (m_level >= 20)
     {
@@ -84,7 +82,7 @@ void LevelOne::GainExperience(int amount)
     }
 }
 
-void LevelOne::RewardMonster(bool epic)
+void PlayerCombat::RewardMonster(bool epic)
 {
     ++m_kills;
     GainExperience(epic ? 160 : 18);
@@ -95,9 +93,9 @@ void LevelOne::RewardMonster(bool epic)
     }
 }
 
-bool LevelOne::Attack(Vec3 player, Vec3 aim, bool sailing)
+bool PlayerCombat::Attack(const WorldPosition& player, Vec3 aim)
 {
-    if (sailing || m_health <= 0 || m_cooldown > 0)
+    if (m_health <= 0 || m_cooldown > 0)
     {
         return false;
     }
@@ -106,53 +104,54 @@ bool LevelOne::Attack(Vec3 player, Vec3 aim, bool sailing)
     {
         return false;
     }
-    m_scene.Get<SlashActor>(m_slash)->Trigger(player, {aim.x / length, 0, aim.z / length});
+    m_slashPosition = player;
+    m_scene.Get<SlashActor>(m_slash)->Trigger({0, 0, 0}, {aim.x / length, 0, aim.z / length});
     m_cooldown = .42f;
     return true;
 }
 
-LevelOne::~LevelOne()
+PlayerCombat::~PlayerCombat()
 {
     m_scene.Destroy(m_root);
     m_scene.CollectDestroyed();
 }
 
-bool LevelOne::Attacking() const
+bool PlayerCombat::Attacking() const
 {
     const auto* slash = m_scene.Get<SlashActor>(m_slash);
     return slash && slash->Attacking();
 }
 
-void LevelOne::Prepare(Vec3 offset, bool showHud)
+void PlayerCombat::Prepare(const WorldPosition& camera, bool showHud)
 {
-    m_scene.Find(m_root)->transform.position = offset;
+    auto* slash = m_scene.Get<SlashActor>(m_slash);
+    const float height = slash->transform.position.y;
+    slash->transform.position = m_slashPosition.RelativeTo(camera);
+    slash->transform.position.y = height;
+    for (auto id : m_numbers)
+    {
+        if (auto* number = m_scene.Get<DamageNumberActor>(id))
+        {
+            number->transform.position = number->location.RelativeTo(camera);
+        }
+    }
     m_showHud = showHud;
 }
 
-void LevelOne::SetActive(bool active)
+void PlayerCombat::SetActiveRegion(const std::function<bool(const WorldPosition&)>& isActive)
 {
-    auto* root = m_scene.Find(m_root);
-    root->enabled = active;
-    root->visible = active;
-}
-
-void LevelOne::SetActiveRegion(const std::function<bool(Vec3)>& isActive)
-{
-    for (const auto* handles : {&m_numbers})
+    for (ActorId id : m_numbers)
     {
-        for (ActorId id : *handles)
+        if (auto* actor = m_scene.Get<DamageNumberActor>(id))
         {
-            if (auto* actor = m_scene.Find(id))
-            {
-                const bool active = isActive(actor->transform.position);
-                actor->enabled = active;
-                actor->visible = active;
-            }
+            const bool active = isActive(actor->location);
+            actor->enabled = active;
+            actor->visible = active;
         }
     }
 }
 
-void LevelOne::PruneHandles(std::vector<ActorId>& handles)
+void PlayerCombat::PruneHandles(std::vector<ActorId>& handles)
 {
     handles.erase(
         std::remove_if(
@@ -165,7 +164,7 @@ void LevelOne::PruneHandles(std::vector<ActorId>& handles)
         handles.end());
 }
 
-void LevelOne::AddNumber(Vec3 position, int amount, bool player)
+void PlayerCombat::AddNumber(WorldPosition position, int amount, bool player)
 {
     PruneHandles(m_numbers);
     if (m_numbers.size() < 64)
@@ -174,7 +173,7 @@ void LevelOne::AddNumber(Vec3 position, int amount, bool player)
     }
 }
 
-void LevelOne::HitPlayer(int damage)
+void PlayerCombat::HitPlayer(int damage)
 {
     if (damage <= 0 || m_invincible > 0 || m_health <= 0)
     {
@@ -184,42 +183,24 @@ void LevelOne::HitPlayer(int damage)
     m_health = (std::max)(0.f, m_health - damage);
     m_invincible = .65f;
     m_sinceHit = 0;
-    m_context.playerDead = m_health <= 0;
-    AddNumber(m_context.player, damage, true);
+    AddNumber(m_player, damage, true);
 }
 
-void LevelOne::Collect(int weapon)
-{
-    if (weapon > m_weapon)
-    {
-        m_weapon = weapon;
-        Notify("새 무기를 자동 장착했습니다! 무기 공격력 +" + std::to_string(m_weapon));
-    }
-    else
-    {
-        ++m_stones;
-    }
-}
-
-void LevelOne::BeginFrame(float dt, Vec3 player, bool sailing, bool village)
+void PlayerCombat::BeginFrame(float dt, const WorldPosition& player, bool village)
 {
     PruneHandles(m_numbers);
     m_invincible = (std::max)(0.f, m_invincible - dt);
     m_cooldown = (std::max)(0.f, m_cooldown - dt);
     m_noticeTime = (std::max)(0.f, m_noticeTime - dt);
     m_sinceHit += dt;
-    m_context.player = player;
-    m_context.active = !sailing && m_terrain.Walk(player.x, player.z);
-    m_context.safe = village;
-    m_context.playerLevel = m_level;
-    m_context.playerDead = m_health <= 0;
+    m_player = player;
     if (m_sinceHit > 5)
     {
-        m_health = (std::min)(float(MaxHealth()), m_health + dt * (m_context.safe ? 12 : 2));
+        m_health = (std::min)(float(MaxHealth()), m_health + dt * (village ? 12 : 2));
     }
 }
 
-bool LevelOne::EndFrame()
+bool PlayerCombat::EndFrame()
 {
     if (m_health > 0)
     {
@@ -230,7 +211,7 @@ bool LevelOne::EndFrame()
     return true;
 }
 
-void LevelOne::EquipmentChanged()
+void PlayerCombat::EquipmentChanged()
 {
     m_health = (std::min)(m_health, float(MaxHealth()));
 }

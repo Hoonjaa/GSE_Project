@@ -62,9 +62,9 @@ const MonsterDefinition& MonsterCatalog::Get(unsigned id)
 unsigned MonsterCatalog::ForIsland(IslandShape shape, unsigned slot)
 {
     const auto index = static_cast<unsigned>(shape);
-    if (index >= 8 || slot >= 5)
+    if (index >= 8 || slot >= SlotsPerIsland)
     {
         throw std::out_of_range("Island monster slot");
     }
-    return index * 5 + slot;
+    return index * SlotsPerIsland + slot;
 }

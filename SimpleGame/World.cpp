@@ -44,7 +44,7 @@ constexpr std::uint64_t World::Seed;
 
 World::World(SceneGraph& scene)
     : m_scene(scene), m_start(std::make_shared<IslandLayout>(IslandGeneration::Describe({0, 0}))),
-      m_tutorial(m_start)
+      m_startTerrain(m_start)
 {
     m_root = m_scene.Create<Actor>(NoActor, "월드").Id();
     m_ocean = m_scene.Create<OceanActor>(m_root).Id();
@@ -431,15 +431,6 @@ bool World::ConservativeSea(const WorldPosition& p, float radius) const
     return true;
 }
 
-bool World::TutorialActive() const
-{
-    // This also covers the starter shore and dock outside its center chunk.
-    const auto p = m_start->Info().center.RelativeTo(Origin(m_center));
-    const float extent = static_cast<float>((m_radius + 1) * ChunkSize);
-    return std::abs(p.x) <= extent + MapCatalog::MaximumIslandSize &&
-           std::abs(p.z) <= extent + MapCatalog::MaximumIslandSize;
-}
-
 bool World::LandAt(const WorldPosition& p, float margin) const
 {
     const auto* chunk = At(p);
@@ -543,6 +534,17 @@ bool World::WasVisited(IslandKey key) const
 {
     const auto found = m_islands.find(key);
     return found != m_islands.end() && found->second.visited;
+}
+
+std::vector<const IslandLayout*> World::IslandLayouts() const
+{
+    std::vector<const IslandLayout*> layouts;
+    layouts.reserve(m_islands.size());
+    for (const auto& entry : m_islands)
+    {
+        layouts.push_back(entry.second.layout.get());
+    }
+    return layouts;
 }
 
 WorldPosition World::StartSpawn() const

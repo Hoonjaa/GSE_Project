@@ -81,31 +81,3 @@ namespace MapCatalog
     const char* GoodName(TradeGood good);
     bool IsSpecialty(IslandShape shape, TradeGood good);
 }
-
-// Quotes are supplied by a pricing policy; the prototype policy uses ItemCatalog base prices.
-struct TradeQuote
-{
-    bool available = false;
-    std::int64_t amount = 0;
-    const char* reason = "거래할 수 없는 상품입니다.";
-};
-
-class TradePricing
-{
-public:
-    virtual ~TradePricing() = default;
-    virtual TradeQuote Buy(IslandShape market, TradeGood item, int affinity) const = 0;
-    virtual TradeQuote Sell(IslandShape market, TradeGood item, int affinity) const = 0;
-};
-
-struct MarketOffer
-{
-    TradeGood good = TradeGood::Grain;
-    bool localSpecialty = false;
-    TradeQuote buy, sell;
-};
-
-namespace MapCatalog
-{
-    std::array<MarketOffer, 32> Offers(IslandShape shape, int affinity = 0);
-}

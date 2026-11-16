@@ -1,5 +1,6 @@
 #include "stdafx.h"
-#include "ItemCatalog.h"
+#include "InventoryIcons.h"
+#include "Renderer.h"
 #include <cmath>
 
 namespace

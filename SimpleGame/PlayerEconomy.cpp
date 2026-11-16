@@ -10,11 +10,6 @@ PlayerEconomy::PlayerEconomy()
     Diagnostics::Get().Event("economy_initial_gold=" + std::to_string(m_gold) + " reason=monster_preview");
 }
 
-InventoryItem EconomyRules::CoralItem(CoralLoot kind)
-{
-    return kind == CoralLoot::Boss ? InventoryItem::BossCoral : InventoryItem::NormalCoral;
-}
-
 const char* EconomyRules::ItemName(InventoryItem item)
 {
     const auto id = static_cast<unsigned>(item);
@@ -31,35 +26,10 @@ std::int64_t EconomyRules::ItemStack(InventoryItem item)
     return static_cast<unsigned>(item) < ItemCatalog::Count ? ItemCatalog::Get(item).stack : 0;
 }
 
-const char* EconomyRules::LootName(CoralLoot kind)
-{
-    return ItemName(CoralItem(kind));
-}
-
-std::int64_t EconomyRules::SellPrice(CoralLoot kind)
-{
-    return ItemPrice(CoralItem(kind));
-}
-
-std::int64_t EconomyRules::StackLimit(CoralLoot kind)
-{
-    return ItemStack(CoralItem(kind));
-}
-
-std::int64_t PlayerEconomy::LootCount(CoralLoot kind) const
-{
-    return ItemCount(EconomyRules::CoralItem(kind));
-}
-
 std::int64_t PlayerEconomy::ItemCount(InventoryItem item) const
 {
     const auto id = static_cast<size_t>(item);
     return id < m_bag.size() ? m_bag[id] : 0;
-}
-
-bool PlayerEconomy::Collect(CoralLoot kind)
-{
-    return CollectItem(EconomyRules::CoralItem(kind));
 }
 
 bool PlayerEconomy::CollectItem(InventoryItem item)
@@ -133,16 +103,6 @@ size_t PlayerEconomy::UsedCargoKinds() const
         count += slot.occupied ? 1 : 0;
     }
     return count;
-}
-
-EconomyResult PlayerEconomy::Store(CoralLoot kind)
-{
-    return StoreItem(EconomyRules::CoralItem(kind));
-}
-
-EconomyResult PlayerEconomy::Unload(CoralLoot kind)
-{
-    return UnloadItem(EconomyRules::CoralItem(kind));
 }
 
 EconomyResult PlayerEconomy::StoreItem(InventoryItem item)

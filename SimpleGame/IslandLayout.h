@@ -1,23 +1,10 @@
 #pragma once
 #include "WorldPosition.h"
+#include "Renderer.h"
+#include "IslandKey.h"
 #include "MapCatalog.h"
 #include <memory>
 #include <vector>
-
-struct IslandKey
-{
-    std::int64_t x = 0, z = 0;
-
-    bool operator<(const IslandKey& other) const
-    {
-        return x < other.x || (x == other.x && z < other.z);
-    }
-
-    bool operator==(const IslandKey& other) const
-    {
-        return x == other.x && z == other.z;
-    }
-};
 
 struct IslandDescriptor
 {
