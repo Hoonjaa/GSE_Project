@@ -285,16 +285,25 @@ void MonsterActor::Overlay(Renderer& r, const ActorTransform& world) const
     {
         return;
     }
-    const float width = definition.epic ? 90.f : 45.f;
-    const Color color = definition.epic ? Color{.83f, .42f, .96f} : Color{.49f, .81f, .38f};
-    r.Panel(screen.x - width / 2, screen.y, width, 5, {.1f, .17f, .2f});
-    r.Panel(screen.x - width / 2, screen.y, width * health / maximum, 5, color);
+    const float width = definition.epic ? 152.f : 112.f;
+    const Color ivory{1, .961f, .863f};
+    r.Panel(screen.x - width / 2, screen.y, width, 7, {.025f, .105f, .139f});
+    r.Panel(screen.x - width / 2, screen.y, width * health / maximum, 7, {.88f, .41f, .36f});
     r.Text(
-        screen.x - 65,
+        screen.x - width * .5f,
         screen.y - 19,
         (definition.epic ? std::string("[에픽] ") : std::string()) + definition.name,
-        color,
+        ivory,
         definition.epic ? 1.4f : 1.15f);
+    if (health < maximum || AttackWarning())
+    {
+        r.Text(
+            screen.x - 19,
+            screen.y + 10,
+            std::to_string(int(health)) + " / " + std::to_string(int(maximum)),
+            ivory,
+            1.1f);
+    }
     if (m_hitTime > 0)
     {
         r.Text(

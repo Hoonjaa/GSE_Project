@@ -49,7 +49,9 @@ World::World(SceneGraph& scene)
     m_root = m_scene.Create<Actor>(NoActor, "월드").Id();
     m_ocean = m_scene.Create<OceanActor>(m_root).Id();
     m_chunksRoot = m_scene.Create<Actor>(m_root, "스트리밍 청크").Id();
-    m_islands[{0, 0}] = {m_start, MapState::Visited({0, 0}), false};
+    m_visitHistory = MapState::VisitedIslands();
+    Diagnostics::Get().Event("map_visit_history_loaded islands=" + std::to_string(m_visitHistory.size()));
+    m_islands[{0, 0}] = {m_start, m_visitHistory.count({0, 0}) != 0, false};
     m_house = MeshCache::LoadOrCreate(
         "map_house_v1",
         []
@@ -309,10 +311,11 @@ void World::Generate(Key key)
                         " shape=" + std::to_string(static_cast<int>(descriptor.shape)) +
                         " width=" + std::to_string(descriptor.width) +
                         " village_ratio=" + std::to_string(layout->VillageArea() / layout->LandArea()));
-                    found =
-                        m_islands
-                            .emplace(islandKey, ResidentIsland{layout, MapState::Visited(islandKey), false})
-                            .first;
+                    found = m_islands
+                                .emplace(
+                                    islandKey,
+                                    ResidentIsland{layout, m_visitHistory.count(islandKey) != 0, false})
+                                .first;
                 }
                 chunk.island = found->second.layout;
             }
@@ -523,6 +526,10 @@ void World::Visit(const WorldPosition& p)
         return;
     }
     auto& state = m_islands.find(layout->Info().key)->second;
+    if (!m_testMap)
+    {
+        m_visitHistory.insert(layout->Info().key);
+    }
     if (!state.visited)
     {
         state.visited = true;
@@ -534,6 +541,29 @@ bool World::WasVisited(IslandKey key) const
 {
     const auto found = m_islands.find(key);
     return found != m_islands.end() && found->second.visited;
+}
+
+std::map<IslandKey, bool> World::ChartIslands() const
+{
+    std::map<IslandKey, bool> result;
+    if (!m_testMap)
+    {
+        for (const auto& key : m_visitHistory)
+        {
+            result.emplace(key, true);
+        }
+    }
+    for (const auto& island : m_islands)
+    {
+        result[island.first] = island.second.visited;
+    }
+    return result;
+}
+
+const IslandLayout* World::CachedIsland(IslandKey key) const
+{
+    const auto found = m_islands.find(key);
+    return found == m_islands.end() ? nullptr : found->second.layout.get();
 }
 
 std::vector<const IslandLayout*> World::IslandLayouts() const
@@ -688,6 +718,12 @@ void World::DrawMap(Renderer& r, const WorldPosition& center, float left, float 
             {
                 continue;
             }
+            const float dx = std::abs(x + size * .5f - left - extent * .5f) + size * .5f;
+            const float dz = std::abs(z + size * .5f - top - extent * .5f) + size * .5f;
+            if (dx * dx + dz * dz > extent * extent * .25f)
+            {
+                continue;
+            }
             r.Panel(
                 x,
                 z,
@@ -696,5 +732,4 @@ void World::DrawMap(Renderer& r, const WorldPosition& center, float left, float 
                 layout.Village(p.x, p.z) ? Color{.85f, .73f, .43f} : Color{.61f, .72f, .40f});
         }
     }
-    r.Panel(left + extent * .5f - 2, top + extent * .5f - 2, 4, 4, {.96f, .90f, .72f});
 }

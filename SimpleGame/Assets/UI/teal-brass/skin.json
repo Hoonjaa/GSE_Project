@@ -1,0 +1,31 @@
+{
+  "panel": {
+    "file": "panel.png",
+    "width": 746,
+    "height": 271,
+    "slicePixels": {
+      "top": 58,
+      "right": 58,
+      "bottom": 58,
+      "left": 58
+    },
+    "suggestedCornerSize": {
+      "hud": 14,
+      "dialog": 19
+    }
+  },
+  "compass": {
+    "file": "compass.png",
+    "width": 251,
+    "height": 256
+  },
+  "palette": {
+    "deepTeal": "#092B34",
+    "enamel": "#10414B",
+    "ivoryText": "#FFF5DC",
+    "mutedText": "#BFD5CF",
+    "brassAccent": "#EFCE8A",
+    "safe": "#8BD3BD",
+    "warning": "#EE937B"
+  }
+}

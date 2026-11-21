@@ -93,7 +93,7 @@ void Prototype::ToggleTestMap()
 
 bool Prototype::SelectTestIsland(unsigned index)
 {
-    if (!m_world.IsTestMap() || index >= IslandTestMap::Count)
+    if (!m_world.IsTestMap() || index >= IslandTestMap::Count || m_ui.Paused())
     {
         return false;
     }

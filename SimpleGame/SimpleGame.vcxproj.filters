@@ -220,6 +220,9 @@
     <ClCompile Include="GameUiNpc.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="GameUiPages.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="GameUiPlayerHud.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -301,9 +304,6 @@
     <ClCompile Include="PlayerCombat.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="PlayerCombatHud.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="PlayerCombatState.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -349,6 +349,9 @@
     <ClCompile Include="TradeRules.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="UiLayout.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="World.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -385,6 +388,9 @@
     <None Include="Shaders\PostProcess.fs">
       <Filter>소스 파일\Shaders</Filter>
     </None>
+    <None Include="Assets\UI\teal-brass\panel.png"><Filter>리소스 파일</Filter></None>
+    <None Include="Assets\UI\teal-brass\compass.png"><Filter>리소스 파일</Filter></None>
+    <None Include="Assets\UI\teal-brass\skin.json"><Filter>리소스 파일</Filter></None>
     <None Include="Monitor\index.html">
       <Filter>리소스 파일</Filter>
     </None>

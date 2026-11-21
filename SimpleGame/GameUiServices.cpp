@@ -7,6 +7,12 @@
 
 bool GameUi::CloseServiceMenu()
 {
+    if (m_page != Page::None)
+    {
+        m_page = m_page == Page::Help ? Page::Pause : Page::None;
+        ClearInput();
+        return true;
+    }
     if (m_inventoryOpen || m_talk.valid)
     {
         m_inventoryOpen = false;
@@ -121,81 +127,46 @@ void GameUi::ServiceKey(unsigned char key)
     }
 }
 
-void GameUi::RenderServiceMenu(Renderer& renderer) const
+void GameUi::RenderServiceMenu(UiCanvas& ui) const
 {
-    if (m_inventoryOpen || m_talk.valid || m_cargoOpen || m_service.kind == TownServiceKind::None)
-    {
-        return;
-    }
+    using namespace UiTheme;
     if (m_service.kind == TownServiceKind::Shop)
     {
-        RenderTrade(renderer);
+        RenderTrade(ui);
         return;
     }
-    if (renderer.Width() < 300 || renderer.Height() < 430)
+    const auto box = ui.Center(848, 424);
+    const float x = box.x + 28, y = box.y;
+    ui.Header(
+        box,
+        "조선소",
+        "◉ " + std::to_string(m_economy.Gold()) + " 골드 · " + MapCatalog::Island(MarketShape()).name +
+            " 부두");
+    ui.Fill({x, y + 112, 430, 207}, Deep);
+    ui.Compass(x + 176, y + 143, 78);
+    ui.Text(x + 166, y + 235, "8m 돛단배", 2, Gold);
+    ui.Text(x + 153, y + 264, m_economy.HasShip() ? "보유 중" : "구매 가능", 1.55f, Muted);
+    const std::array<const char*, 4> labels{{"선박 가격", "최대 내구도", "적재 공간", "동료 정원"}};
+    const std::array<std::string, 4> values{
+        {std::to_string(EconomyRules::SailboatPrice) + "골드",
+         "100",
+         "물품 " + std::to_string(EconomyRules::CargoKinds) + "종",
+         std::to_string(EconomyRules::CompanionCapacity) + "명"}};
+    for (unsigned i = 0; i < labels.size(); ++i)
     {
-        renderer.Text(
-            12,
-            12,
-            "시설 메뉴를 보려면 창을 키워주세요. E 또는 Esc: 닫기",
-            {.98f, .76f, .35f},
-            1,
-            static_cast<float>((std::max)(1, renderer.Width() - 24)));
-        return;
+        const UiRect row{x + 450, y + 112 + i * 52.f, 342, 46};
+        ui.Card(row);
+        ui.Text(row.x + 12, row.y + 12, labels[i], 1.8f);
+        ui.Text(row.x + 225, row.y + 12, values[i], 1.7f, i ? Ivory : Gold, 110, 24);
     }
-    const float width = (std::min)(640.f, float(renderer.Width() - 24));
-    const float height = 400.f;
-    const float left = (renderer.Width() - width) * .5f;
-    const float top = (std::max)(12.f, (renderer.Height() - height) * .5f);
-    const Color ink = {.06f, .16f, .22f}, paper = {.96f, .90f, .72f}, gold = {.98f, .76f, .35f};
-    renderer.Panel(left, top, width, height, ink);
-    renderer.Panel(left, top, width, 4, Color{.28f, .65f, .75f});
-    renderer.Text(left + 20, top + 16, "조선소 · 선박 구매 및 업그레이드", gold, 2, width - 40);
-    renderer.Text(left + 20, top + 48, "보유 골드: " + std::to_string(m_economy.Gold()), paper, 1.6f);
-    renderer.Text(left + 20, top + 72, "I: 인벤토리·장비 / K: 선박 적재창", paper, 1.4f, width - 40);
-    renderer.Text(left + 20, top + 100, "배 미소유 → 8m 돛단배 / 50골드", gold, 1.5f);
-    renderer.Text(
-        left + 20,
-        top + 124,
-        "동료 정원 " + std::to_string(EconomyRules::CompanionCapacity) +
-            "명 / 적재 5종류 / 품목별 중첩 상한 적용",
-        paper,
-        1.25f,
-        width - 40);
-    renderer.Text(
-        left + 20,
-        top + 148,
-        m_economy.HasShip() ? "현재 단계 구매 완료 · 상위 업그레이드는 준비 중입니다."
-                            : "[B 또는 U] 돛단배 구매·업그레이드",
-        paper,
-        1.4f,
-        width - 40);
-    renderer.Text(
-        left + 20,
-        top + 174,
-        "K: 전체 적재창 / 1·2 산호 싣기 / 3·4 산호 내리기",
-        paper,
-        1.2f,
-        width - 40);
-    const auto& cargo = m_economy.Cargo();
-    for (size_t i = 0; i < cargo.size(); ++i)
-    {
-        const auto& slot = cargo[i];
-        std::string label = std::to_string(i + 1) + ". ";
-        if (slot.occupied)
-        {
-            label += std::string(EconomyRules::ItemName(slot.item)) + " " + std::to_string(slot.count) + "/" +
-                     std::to_string(EconomyRules::ItemStack(slot.item));
-        }
-        else
-        {
-            label += "빈 적재 슬롯";
-        }
-        renderer.Text(left + 28, top + 202 + static_cast<float>(i) * 22, label, paper, 1.3f, width - 50);
-    }
-    if (!m_serviceMessage.empty())
-    {
-        renderer.Text(left + 20, top + height - 66, m_serviceMessage, gold, 1.2f, width - 40);
-    }
-    renderer.Text(left + 20, top + height - 26, "[E / Esc] 닫기", paper, 1.3f);
+    ui.Text(x, y + 325, m_serviceMessage, 1.4f, Gold, 790, 20);
+    ui.Footer(box);
+    const bool owned = m_economy.HasShip();
+    ui.Button(
+        {x + 625, y + 362, 167, 42},
+        owned ? "K  적재창" : "B  돛단배 구매",
+        UiAction::Key,
+        owned ? 'k' : 'b',
+        true,
+        owned ? ShipAtService() : m_economy.Gold() >= EconomyRules::SailboatPrice);
 }

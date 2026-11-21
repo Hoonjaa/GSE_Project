@@ -76,8 +76,20 @@ MarineTargetActor* MarineSystem::Target(ActorId id)
 void MarineSystem::Notify(const std::string& text)
 {
     m_notice = text;
+    m_noticeTime = 7;
     Diagnostics::Get().Event(
         "marine_event kind=" + std::to_string(static_cast<int>(m_encounter)) + " " + text);
+}
+
+unsigned MarineSystem::TentaclesRemaining() const
+{
+    unsigned alive = 0;
+    for (const auto id : m_tentacles)
+    {
+        const auto* actor = m_scene.Get<MarineTargetActor>(id);
+        alive += actor && actor->health > 0;
+    }
+    return alive;
 }
 
 void MarineSystem::Reset()
@@ -89,6 +101,7 @@ void MarineSystem::Reset()
     m_tornadoCount = m_escapeCount = 0;
     m_time = m_krakenRoll = m_stormRoll = m_escapeTime = m_stormTime = m_attackCooldown = 0;
     m_notice.clear();
+    m_noticeTime = 0;
     m_lastEscape = 0;
     for (auto id : m_pirates)
     {
@@ -262,6 +275,7 @@ bool MarineSystem::Update(
 {
     m_ship = ship;
     m_time += dt;
+    m_noticeTime = (std::max)(0.f, m_noticeTime - dt);
     m_attackCooldown = (std::max)(0.f, m_attackCooldown - dt);
     if (!m_economy.HasShip())
     {

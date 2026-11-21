@@ -154,8 +154,8 @@ namespace
                 "Nearby effect coordinates lost precision");
         }
         const HudLayout hud(1280, 800);
-        Check(hud.economy.Contains(100, 370), "Gold HUD hit region missing");
-        Check(!hud.economy.Contains(451, 370), "Gold HUD hit region extends outside panel");
+        Check(hud.economy.Contains(100, 162), "Gold HUD hit region missing");
+        Check(!hud.economy.Contains(156, 162), "Gold HUD hit region extends outside panel");
     }
 }
 

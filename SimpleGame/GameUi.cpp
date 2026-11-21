@@ -2,6 +2,7 @@
 #include "GameUi.h"
 #include "KoreanText.h"
 #include <algorithm>
+#include <iterator>
 
 GameUi::GameUi(
     World& world,
@@ -13,20 +14,40 @@ GameUi::GameUi(
 {
 }
 
-void GameUi::SetView(
-    int width,
-    int height,
-    const WorldPosition& camera,
-    bool overview,
-    unsigned island,
-    double average)
+void GameUi::SetView(int width, int height, bool overview, unsigned island, double average)
 {
     m_viewWidth = width;
     m_viewHeight = height;
-    m_camera = camera;
     m_testOverview = overview;
     m_testIsland = island;
     m_frameAverage = average;
+    if (const auto* layout = m_world.CurrentIsland(ActivePosition()))
+    {
+        const auto mode = m_world.IsTestMap() ? 1 : 0;
+        m_lastIsland[mode] = layout->Info();
+        m_haveLastIsland[mode] = true;
+    }
+}
+
+void GameUi::Escape()
+{
+    if (!CloseServiceMenu())
+    {
+        m_page = Page::Pause;
+        ClearInput();
+    }
+}
+
+void GameUi::OpenTestPanel()
+{
+    if (!m_world.IsTestMap() || Paused())
+    {
+        return;
+    }
+    const bool opening = m_page != Page::Test;
+    CloseAll();
+    m_page = opening ? Page::Test : Page::None;
+    ClearInput();
 }
 
 void GameUi::CloseAll()
@@ -65,6 +86,11 @@ bool GameUi::Interact()
 
 bool GameUi::Key(unsigned char key)
 {
+    if (m_page != Page::None)
+    {
+        PageKey(key);
+        return true;
+    }
     if (key == 'i')
     {
         ToggleInventory();
@@ -92,9 +118,31 @@ bool GameUi::Key(unsigned char key)
     }
     switch (key)
     {
+        case 'j':
+        case 'm':
+            m_page = key == 'j' ? Page::Journal : Page::Chart;
+            if (m_page == Page::Chart)
+            {
+                const auto records = m_world.ChartIslands();
+                const auto mode = m_world.IsTestMap() ? 1 : 0;
+                const auto island = records.find(m_lastIsland[mode].key);
+                m_chartSelection = island == records.end()
+                                       ? 0u
+                                       : static_cast<unsigned>(std::distance(records.begin(), island));
+            }
+            ClearInput();
+            return true;
         case 'k':
             ToggleCargo();
             return true;
+    }
+    return VisualKey(key);
+}
+
+bool GameUi::VisualKey(unsigned char key)
+{
+    switch (key)
+    {
         case 'h':
             m_hud = !m_hud;
             return true;
@@ -127,51 +175,78 @@ bool GameUi::Key(unsigned char key)
     return false;
 }
 
-bool GameUi::ConsumesPointer(int x, int y) const
+bool GameUi::PanelClick(int x, int y, const std::function<void(UiAction, unsigned)>& worldAction)
 {
-    if (PlayerPanelOpen())
+    UiCanvas ui(m_viewWidth, m_viewHeight, nullptr, x, y);
+    BuildUi(ui);
+    const bool consumed = PlayerPanelOpen() || ui.consumed;
+    switch (ui.action)
     {
-        return true;
-    }
-    if (!m_hud)
-    {
-        return false;
-    }
-    const HudLayout layout(m_viewWidth, m_viewHeight);
-    if (layout.title.Contains(x, y) || layout.footer.Contains(x, y))
-    {
-        return true;
-    }
-    if (m_world.IsTestMap() && layout.testChart.Contains(x, y))
-    {
-        return true;
-    }
-    if (!m_world.IsTestMap() && m_viewWidth > 760 && layout.chart.Contains(x, y))
-    {
-        return true;
-    }
-    if (!m_testOverview)
-    {
-        if ((m_postHud ? layout.postStats : layout.stats).Contains(x, y))
+        case UiAction::None:
+            break;
+        case UiAction::Key:
+            if (ui.value == 27)
+            {
+                Escape();
+            }
+            else if (!m_marine->Captured())
+            {
+                if (ui.value == 'e')
+                {
+                    if (!Interact())
+                    {
+                        m_player.Interact();
+                    }
+                }
+                else
+                {
+                    Key(static_cast<unsigned char>(ui.value));
+                }
+            }
+            break;
+        case UiAction::Close:
+            CloseServiceMenu();
+            break;
+        case UiAction::Bag:
+            m_inventorySelection = ui.value;
+            break;
+        case UiAction::Gear:
+            if (m_economy.Equipped(static_cast<EquipSlot>(ui.value)) >= 0)
+            {
+                m_serviceMessage = m_economy.Unequip(static_cast<EquipSlot>(ui.value)).message;
+                m_combat.EquipmentChanged();
+            }
+            break;
+        case UiAction::Dismiss:
         {
-            return true;
+            const auto companion = m_relations.Companions().at(ui.value);
+            m_serviceMessage = m_relations.Dismiss(companion).message;
+            break;
         }
-        if (layout.economy.Contains(x, y))
-        {
-            return true;
-        }
-        if (m_world.CurrentIsland(ActivePosition()) && layout.island.Contains(x, y))
-        {
-            return true;
-        }
-        if (Aboard() && layout.marine.Contains(x, y))
-        {
-            return true;
-        }
-        if (!m_postHud && m_combat.NoticeTime() > 0 && layout.combatNotice.Contains(x, y))
-        {
-            return true;
-        }
+        case UiAction::Market:
+            m_marketSelection = ui.value;
+            break;
+        case UiAction::Cargo:
+            m_cargoSelection = ui.value;
+            break;
+        case UiAction::Quest:
+            m_questSelection = ui.value;
+            break;
+        case UiAction::Island:
+            m_chartSelection = ui.value;
+            break;
+        case UiAction::TestPanel:
+            OpenTestPanel();
+            break;
+        case UiAction::Help:
+            m_page = Page::Help;
+            break;
+        case UiAction::Quit:
+            m_exitRequested = true;
+            break;
+        default:
+            worldAction(ui.action, ui.value);
+            break;
     }
-    return m_player.NoticeTime() > 0 && layout.message.Contains(x, y);
+    return consumed;
 }

@@ -10,62 +10,85 @@
 
 namespace
 {
-    std::wstring Path(IslandKey key)
+    std::wstring Directory()
+    {
+        const auto base = Diagnostics::ExecutableDirectory();
+        return base.empty() ? std::wstring{}
+                            : base + L"Saves\\world_map_v1_" + std::to_wstring(IslandGeneration::WorldSeed);
+    }
+
+    std::wstring Name(IslandKey key)
+    {
+        return L"island_" + std::to_wstring(key.x) + L"_" + std::to_wstring(key.z) + L".state";
+    }
+
+    std::wstring SavePath(IslandKey key)
     {
         const auto base = Diagnostics::ExecutableDirectory();
         if (base.empty() || !Diagnostics::MakeDirectory(base + L"Saves"))
         {
             return {};
         }
-        const auto folder = base + L"Saves\\world_map_v1_" + std::to_wstring(IslandGeneration::WorldSeed);
+        const auto folder = Directory();
         if (!Diagnostics::MakeDirectory(folder))
         {
             return {};
         }
-        return folder + L"\\island_" + std::to_wstring(key.x) + L"_" + std::to_wstring(key.z) + L".state";
+        return folder + L"\\" + Name(key);
+    }
+
+    bool ReadVisited(const std::wstring& path, IslandKey& key)
+    {
+        std::ifstream file(path.c_str(), std::ios::binary | std::ios::ate);
+        const auto size = file.tellg();
+        if (!file || size <= 0 || size > 256)
+        {
+            return false;
+        }
+        file.seekg(0);
+        std::string magic;
+        std::uint64_t seed;
+        int visited;
+        if (!(file >> magic >> seed >> key.x >> key.z >> visited))
+        {
+            return false;
+        }
+        file >> std::ws;
+        return magic == "WORLD_MAP_V1" && seed == IslandGeneration::WorldSeed && visited == 1 && file.eof();
     }
 }
 
-bool MapState::Visited(IslandKey key)
+std::set<IslandKey> MapState::VisitedIslands()
 {
-    const auto path = Path(key);
-    if (path.empty())
+    std::set<IslandKey> result;
+    auto directory = Directory();
+    if (directory.empty())
     {
-        return false;
+        return result;
     }
-    std::ifstream file(path.c_str(), std::ios::binary | std::ios::ate);
-    if (!file)
+    directory += L"\\";
+    WIN32_FIND_DATAW data{};
+    const HANDLE files = FindFirstFileW((directory + L"island_*.state").c_str(), &data);
+    if (files == INVALID_HANDLE_VALUE)
     {
-        return false;
+        return result;
     }
-    const std::streamoff bytes = file.tellg();
-    if (bytes <= 0 || bytes > 256)
+    do
     {
-        return false;
-    }
-    file.seekg(0);
-    std::string magic;
-    std::uint64_t seed;
-    std::int64_t x, z;
-    int visited;
-    if (!(file >> magic >> seed >> x >> z >> visited))
-    {
-        return false;
-    }
-    file >> std::ws;
-    const bool valid = magic == "WORLD_MAP_V1" && seed == IslandGeneration::WorldSeed && x == key.x &&
-                       z == key.z && visited == 1 && file.eof();
-    if (valid)
-    {
-        Diagnostics::Get().Event(
-            "map_visited_loaded x=" + std::to_string(key.x) + " z=" + std::to_string(key.z));
-    }
-    return valid;
+        IslandKey key;
+        if (!(data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
+            ReadVisited(directory + data.cFileName, key) && Name(key) == data.cFileName)
+        {
+            result.insert(key);
+        }
+    } while (FindNextFileW(files, &data));
+    FindClose(files);
+    return result;
 }
 
 bool MapState::SaveVisited(IslandKey key)
 {
-    const auto path = Path(key);
+    const auto path = SavePath(key);
     if (path.empty())
     {
         Diagnostics::Get().Event(

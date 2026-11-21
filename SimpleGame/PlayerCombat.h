@@ -24,7 +24,7 @@ public:
     PlayerCombat& operator=(const PlayerCombat&) = delete;
     void BeginFrame(float dt, const WorldPosition& player, bool village);
     bool EndFrame();
-    void Prepare(const WorldPosition& camera, bool showHud);
+    void Prepare(const WorldPosition& camera);
     void SetActiveRegion(const std::function<bool(const WorldPosition&)>& isActive);
     bool Attack(const WorldPosition& player, Vec3 aim);
     void RewardMonster(bool epic);
@@ -65,12 +65,21 @@ public:
         return m_noticeTime;
     }
 
+    const std::string& Notice() const
+    {
+        return m_notice;
+    }
+
+    int ExperienceTarget() const
+    {
+        return 40 + (m_level - 1) * 25;
+    }
+
 private:
     void GainExperience(int amount);
     void Notify(const std::string& text);
     void HitPlayer(int damage);
     void AddNumber(WorldPosition position, int amount, bool player);
-    void Overlay(Renderer& renderer) const;
     void PruneHandles(std::vector<ActorId>& handles);
     SceneGraph& m_scene;
     PlayerEconomy& m_economy;
@@ -81,6 +90,6 @@ private:
     int m_level = 1, m_xp = 0, m_upgrade = 0, m_kills = 0;
     float m_health = 100, m_invincible = 0, m_sinceHit = 0, m_cooldown = 0;
     float m_noticeTime = 0;
-    bool m_bossDefeated = false, m_showHud = true;
+    bool m_bossDefeated = false;
     std::string m_notice;
 };

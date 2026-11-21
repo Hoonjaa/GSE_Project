@@ -37,6 +37,8 @@ public:
     void Reset();
     bool Attached(int ship) const;
     bool Active() const;
+    float LootTime() const;
+    static constexpr int LootSeconds = 40;
 
     bool Failed() const
     {

@@ -357,6 +357,30 @@ MonsterPopulation MonsterSystem::Population(IslandKey island) const
     return result;
 }
 
+bool MonsterSystem::AttackWarning(const WorldPosition& player) const
+{
+    const auto* island = m_world.CurrentIsland(player);
+    if (!island)
+    {
+        return false;
+    }
+    const auto group = m_groups.find(island->Info().key);
+    if (group == m_groups.end())
+    {
+        return false;
+    }
+    const auto local = player.RelativeTo(island->Info().center);
+    for (const auto id : group->second->monsters)
+    {
+        const auto* actor = m_scene.Get<MonsterActor>(id);
+        if (actor && actor->AttackWarning() && Squared(local, actor->transform.position) <= 64)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 void MonsterSystem::Prepare(const WorldPosition& camera, bool showStatus)
 {
     for (auto& item : m_groups)

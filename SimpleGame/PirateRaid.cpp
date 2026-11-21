@@ -200,12 +200,25 @@ void PirateRaid::Cleared(int i)
         }
     }
     vessel.cleared = true;
-    vessel.remaining = 40;
+    vessel.remaining = LootSeconds;
     vessel.gold = std::uniform_int_distribution<int>(10, 20)(m_random);
     vessel.tentacles = std::uniform_int_distribution<int>(0, 1)(m_random);
-    Ship(i)->lootTime = 40;
+    Ship(i)->lootTime = LootSeconds;
     m_notify("해적 2명 처치! 해적선 약탈과 내 배 복귀까지 40초입니다. 가장자리 E로 건너가세요.");
     Diagnostics::Get().Event("pirate_loot_countdown_begin ship=" + std::to_string(i) + " seconds=40");
+}
+
+float PirateRaid::LootTime() const
+{
+    float next = -1;
+    for (const auto& vessel : m_ships)
+    {
+        if (vessel.cleared && !vessel.finished && (next < 0 || vessel.remaining < next))
+        {
+            next = vessel.remaining;
+        }
+    }
+    return next;
 }
 
 void PirateRaid::Update(float dt, float heading, const RaidPlayer& player)

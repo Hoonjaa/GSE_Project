@@ -22,6 +22,26 @@ const QuestDefinition& QuestRules::Get(unsigned role)
     return Quests[role];
 }
 
+const char* QuestRules::Title(unsigned role)
+{
+    static const std::array<const char*, NpcRole::Count> titles{
+        {"항구 주변의 위험", "섬의 전리품", "항구의 첫 거래"}};
+    return titles.at(role);
+}
+
+const char* QuestRules::StatusLabel(QuestStatus status, int progress, int target)
+{
+    if (status == QuestStatus::Complete)
+    {
+        return "완료";
+    }
+    if (status == QuestStatus::Available)
+    {
+        return "수락 가능";
+    }
+    return progress >= target ? "보고 가능" : "진행 중";
+}
+
 std::string QuestRules::Description(unsigned role)
 {
     const auto& quest = Get(role);

@@ -91,21 +91,29 @@ namespace
     {
         if (key == 27)
         {
-            if (game && game->CloseServiceMenu())
+            if (game)
             {
-                return;
+                game->Escape();
             }
-            glutLeaveMainLoop();
             return;
         }
         if (game)
         {
             game->Key(key, true);
+            if (game->ExitRequested())
+            {
+                glutLeaveMainLoop();
+            }
         }
     }
 
     void SpecialDown(int key, int, int)
     {
+        if (game && key == GLUT_KEY_F10)
+        {
+            game->OpenTestPanel();
+            return;
+        }
         if (game && key >= GLUT_KEY_F1 && key <= GLUT_KEY_F8 && game->SelectTestIsland(key - GLUT_KEY_F1))
         {
             return;
@@ -141,6 +149,10 @@ namespace
         if (game && renderer && button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
         {
             game->MouseAttack(x, y, *renderer);
+            if (game->ExitRequested())
+            {
+                glutLeaveMainLoop();
+            }
         }
     }
 
@@ -195,7 +207,8 @@ int main(int argc, char** argv)
         << "WASD: move | Space: boost | E: board/helm/land | F: upgrade/fish | I: inventory | K: cargo\n"
         << "O: summon tornado | P: summon kraken | B: post processing\n"
         << "T: test map | Test map: F1-F8 islands, Y overview/detail\n"
-        << "G: chunk grid | H: HUD | R: return home | Escape: exit\n";
+        << "J: quests | M: chart | F10: test tools | Escape: menu\n"
+        << "G: chunk grid | H: HUD | V: debug HUD | R: return home\n";
     auto glInfo = [](GLenum name)
     {
         const auto* value = glGetString(name);

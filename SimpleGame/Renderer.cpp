@@ -14,6 +14,61 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <wincodec.h>
+#include <wrl/client.h>
+
+namespace
+{
+    GLuint LoadUiArt(const wchar_t* filename, UINT width, UINT height)
+    {
+        using Microsoft::WRL::ComPtr;
+        ComPtr<IWICImagingFactory> factory;
+        ComPtr<IWICBitmapDecoder> decoder;
+        ComPtr<IWICBitmapFrameDecode> frame;
+        ComPtr<IWICFormatConverter> pixels;
+        const auto path = Diagnostics::ExecutableDirectory() + L"Assets\\UI\\teal-brass\\" + filename;
+        UINT actualWidth = 0, actualHeight = 0;
+        if (FAILED(CoCreateInstance(
+                CLSID_WICImagingFactory,
+                nullptr,
+                CLSCTX_INPROC_SERVER,
+                IID_PPV_ARGS(factory.GetAddressOf()))) ||
+            FAILED(factory->CreateDecoderFromFilename(
+                path.c_str(),
+                nullptr,
+                GENERIC_READ,
+                WICDecodeMetadataCacheOnDemand,
+                decoder.GetAddressOf())) ||
+            FAILED(decoder->GetFrame(0, frame.GetAddressOf())) ||
+            FAILED(frame->GetSize(&actualWidth, &actualHeight)) || actualWidth != width ||
+            actualHeight != height || FAILED(factory->CreateFormatConverter(pixels.GetAddressOf())) ||
+            FAILED(pixels->Initialize(
+                frame.Get(),
+                GUID_WICPixelFormat32bppRGBA,
+                WICBitmapDitherTypeNone,
+                nullptr,
+                0,
+                WICBitmapPaletteTypeCustom)))
+        {
+            return 0;
+        }
+        std::vector<BYTE> rgba(width * height * 4);
+        if (FAILED(pixels->CopyPixels(nullptr, width * 4, static_cast<UINT>(rgba.size()), rgba.data())))
+        {
+            return 0;
+        }
+        GLuint texture = 0;
+        glGenTextures(1, &texture);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+        return texture;
+    }
+}
 
 // Rasterize Windows Korean glyphs once, then draw their cached coverage in OpenGL.
 // The bounded atlas can be recycled after pending vertices have been flushed.
@@ -396,6 +451,22 @@ Renderer::Renderer(int w, int h) : m_width(w), m_height(h)
     }
     glUseProgram(m_program);
     glUniform1i(glGetUniformLocation(m_program, "u_Font"), 0);
+    glUniform1i(glGetUniformLocation(m_program, "u_Panel"), 1);
+    glUniform1i(glGetUniformLocation(m_program, "u_Compass"), 2);
+    const HRESULT apartment = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (SUCCEEDED(apartment) || apartment == RPC_E_CHANGED_MODE)
+    {
+        m_uiArt[0] = LoadUiArt(L"panel.png", 746, 271);
+        m_uiArt[1] = LoadUiArt(L"compass.png", 251, 256);
+        if (SUCCEEDED(apartment))
+        {
+            CoUninitialize();
+        }
+    }
+    if (!HasArt(UiArt::Panel) || !HasArt(UiArt::Compass))
+    {
+        Diagnostics::Get().Event("ui_art_missing expected=Assets/UI/teal-brass");
+    }
     m_post.reset(new PostProcessing(
         LoadProgram(L"PostProcess.vs", L"PostProcess.fs"),
         LoadProgram(L"PostProcess.vs", L"Blur.fs")));
@@ -406,6 +477,7 @@ Renderer::Renderer(int w, int h) : m_width(w), m_height(h)
 
 Renderer::~Renderer()
 {
+    glDeleteTextures(static_cast<GLsizei>(m_uiArt.size()), m_uiArt.data());
     for (const auto& entry : m_meshCache)
     {
         glDeleteBuffers(1, &entry.second.vbo);
@@ -703,6 +775,14 @@ void Renderer::Flush()
     glUniform1f(glGetUniformLocation(m_program, "u_SceneLight"), m_overlay ? 1.f : m_sceneLight);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, m_font ? m_font->texture : 0);
+    if (m_overlay)
+    {
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, m_uiArt[0]);
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, m_uiArt[1]);
+        glActiveTexture(GL_TEXTURE0);
+    }
     glBindVertexArray(m_vao);
     glBindBuffer(GL_ARRAY_BUFFER, m_vbo);
     glBufferData(
@@ -748,6 +828,30 @@ void Renderer::Panel(float x, float y, float w, float h, Color c)
     const float l = 2 * x / m_width - 1, r = 2 * (x + w) / m_width - 1;
     const float t = 1 - 2 * y / m_height, b = 1 - 2 * (y + h) / m_height;
     Geometry::Quad(m_batch, {l, t, 0}, {r, t, 0}, {r, b, 0}, {l, b, 0}, c);
+}
+
+void Renderer::DimOverlay(float opacity)
+{
+    const Vertex a{{-1, 1, 0}, {}, {-1, opacity}}, b{{1, 1, 0}, {}, {-1, opacity}};
+    const Vertex c{{1, -1, 0}, {}, {-1, opacity}}, d{{-1, -1, 0}, {}, {-1, opacity}};
+    m_batch.insert(m_batch.end(), {a, b, c, a, c, d});
+}
+
+void Renderer::Sprite(UiArt art, float x, float y, float w, float h, Vec2 uvMin, Vec2 uvMax)
+{
+    if (!HasArt(art))
+    {
+        return;
+    }
+    const float l = 2 * x / m_width - 1, r = 2 * (x + w) / m_width - 1;
+    const float t = 1 - 2 * y / m_height, b = 1 - 2 * (y + h) / m_height;
+    const float band = art == UiArt::Panel ? 2.f : 4.f;
+    const Color white{1, 1, 1};
+    const Vertex a{{l, t, 0}, white, {band + uvMin.x, uvMin.y}};
+    const Vertex e{{r, t, 0}, white, {band + uvMax.x, uvMin.y}};
+    const Vertex f{{r, b, 0}, white, {band + uvMax.x, uvMax.y}};
+    const Vertex d{{l, b, 0}, white, {band + uvMin.x, uvMax.y}};
+    m_batch.insert(m_batch.end(), {a, e, f, a, f, d});
 }
 
 void Renderer::Text(

@@ -14,6 +14,8 @@ struct QuestDefinition
 namespace QuestRules
 {
     const QuestDefinition& Get(unsigned role);
+    const char* Title(unsigned role);
+    const char* StatusLabel(QuestStatus status, int progress, int target);
     std::string Description(unsigned role);
     int MaterialCount(IslandShape shape, const PlayerEconomy& inventory);
     bool DeliverMaterials(IslandShape shape, int quantity, PlayerEconomy& inventory);

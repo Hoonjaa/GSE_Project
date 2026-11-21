@@ -88,83 +88,65 @@ void GameUi::TradeKey(unsigned char key)
     m_marketSelection = next.empty() ? 0 : (std::min)(m_marketSelection, unsigned(next.size() - 1));
 }
 
-void GameUi::RenderTrade(Renderer& r) const
+void GameUi::RenderTrade(UiCanvas& ui) const
 {
-    const Color ink = {.07f, .19f, .23f}, paper = {.96f, .90f, .72f}, gold = {.98f, .71f, .32f};
-    const float w = (std::min)(780.f, r.Width() - 24.f), h = (std::min)(570.f, r.Height() - 24.f);
-    const float x = (r.Width() - w) * .5f, y = (r.Height() - h) * .5f;
-    if (w < 400 || h < 440)
-    {
-        r.Text(12, 12, "상점은 424×464 이상에서 표시됩니다. E / Esc: 닫기", gold, 1.2f, r.Width() - 24.f);
-        return;
-    }
-    r.Panel(x, y, w, h, ink);
-    const NpcKey merchant = {m_service.island, 2};
-    const auto& state = static_cast<const NpcState&>(m_relations).Npc(merchant);
-    r.Text(
-        x + 20,
-        y + 16,
-        std::string(m_buying ? "상점 · 특산품 구매" : "상점 · 소지품 판매") + " / 골드 " +
-            std::to_string(m_economy.Gold()),
-        gold,
-        1.8f,
-        w - 40);
-    r.Text(
-        x + 20,
-        y + 49,
-        "상인 호감도 " + std::to_string(state.affinity) + " · 높을수록 구매가↓ 판매가↑",
-        paper,
-        1.3f,
-        w - 40);
-    r.Text(x + 20, y + 78, "Tab: 구매·판매 전환 / W·S: 선택 / Enter: 1개 거래", paper, 1.25f, w - 40);
+    using namespace UiTheme;
+    const auto box = ui.Center(848, m_buying ? 466 : 526);
+    const float x = box.x + 28, y = box.y, footer = y + box.h - 62;
+    const NpcKey merchant{m_service.island, NpcRole::Merchant};
+    const auto& record = m_relations.Npc(merchant);
+    ui.Header(
+        box,
+        "항구 상점",
+        "◉ " + std::to_string(m_economy.Gold()) + " 골드 · 상인 호감도 " + std::to_string(record.affinity));
+    ui.Card({x, y + 112, 66, 42}, m_buying);
+    ui.Card({x + 74, y + 112, 66, 42}, !m_buying);
+    ui.Text(x + 13, y + 124, "구매", 1.75f);
+    ui.Text(x + 87, y + 124, "판매", 1.75f);
+    ui.Hit({x + (m_buying ? 74.f : 0.f), y + 112, 66, 42}, UiAction::Key, 9);
     const auto items = MarketItems();
     const unsigned selected = items.empty() ? 0 : (std::min)(m_marketSelection, unsigned(items.size() - 1));
-    const unsigned first = (selected / 7) * 7;
-    for (unsigned row = 0; row < 7 && first + row < items.size(); ++row)
+    const unsigned pageSize = m_buying ? 4 : 5;
+    const unsigned first = (selected / pageSize) * pageSize;
+    for (unsigned i = first; i < first + pageSize && i < items.size(); ++i)
     {
-        const unsigned index = first + row;
-        const auto item = items[index];
-        const float Y = y + 118 + row * 39;
-        if (index == selected)
-        {
-            r.Panel(x + 14, Y - 4, w - 28, 36, {.18f, .33f, .34f});
-        }
-        const auto price = m_buying ? TradeRules::Buy(MarketShape(), item, state.affinity)
-                                    : TradeRules::Sell(MarketShape(), item, state.affinity);
-        r.Icon(m_icons.Get(ItemCatalog::Get(item).icon), x + 22, Y, 26, 26);
-        r.Text(x + 60, Y, ItemCatalog::Get(item).name, paper, 1.35f, w * .45f);
-        r.Text(
-            x + w * .57f,
-            Y,
+        const UiRect row{x, y + 165 + (i - first) * 49.f, 792, 44};
+        const auto item = items[i];
+        const auto price = m_buying ? TradeRules::Buy(MarketShape(), item, record.affinity)
+                                    : TradeRules::Sell(MarketShape(), item, record.affinity);
+        ui.Card(row, i == selected);
+        ui.Hit(row, UiAction::Market, i);
+        ui.Icon(m_icons.Get(ItemCatalog::Get(item).icon), row.x + 13, row.y + 10, 24);
+        ui.Text(row.x + 50, row.y + 11, ItemCatalog::Get(item).name, 1.8f, Ivory, 516, 23);
+        ui.Text(
+            row.x + 580,
+            row.y + 11,
             std::to_string(price) + "골드 · 소지 " + std::to_string(m_economy.ItemCount(item)),
-            gold,
-            1.25f,
-            w * .4f - 20);
+            1.65f,
+            Gold,
+            203,
+            22);
     }
     if (items.empty())
     {
-        r.Text(
-            x + 24,
-            y + 130,
-            "판매할 소지품이 없습니다. 적재품은 K에서 먼저 내리세요.",
-            paper,
-            1.4f,
-            w - 48);
+        ui.Text(x, y + 177, "판매할 소지품이 없습니다.", 1.6f, Muted);
     }
-    r.Text(
-        x + 20,
-        y + h - 130,
-        m_buying ? "산지 특산품을 구매해 다른 종류의 섬에 판매하면 더 높은 가격을 받습니다."
-                 : "[P] 매입가 두 배 요구: 거절·호감도 -5 (판매하지 않음)",
-        paper,
-        1.2f,
-        w - 40);
-    r.Text(x + 20, y + h - 91, m_serviceMessage, gold, 1.3f, w - 40);
-    r.Text(
-        x + 20,
-        y + h - 36,
-        "E / Esc: 닫기 · I: 인벤토리 · 일반 거래 성공 시 호감도 +1",
-        paper,
-        1.25f,
-        w - 40);
+    if (items.size() > pageSize)
+    {
+        ui.Button({x + 660, y + 112, 60, 42}, "W  ↑", UiAction::Key, 'w');
+        ui.Button({x + 732, y + 112, 60, 42}, "S  ↓", UiAction::Key, 's');
+    }
+    ui.Text(x + 148, footer + 11, m_serviceMessage, 1.45f, Gold, 355, 20);
+    ui.Footer(box);
+    if (!m_buying)
+    {
+        ui.Button({x + 522, footer, 108, 42}, "P  흥정", UiAction::Key, 'p', false, !items.empty());
+    }
+    ui.Button(
+        {x + 638, footer, 154, 42},
+        m_buying ? "Enter  1개 구매" : "Enter  1개 판매",
+        UiAction::Key,
+        13,
+        true,
+        !items.empty());
 }

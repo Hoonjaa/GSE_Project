@@ -236,6 +236,7 @@
     <ClCompile Include="GameUiHud.cpp" />
     <ClCompile Include="GameUiInventory.cpp" />
     <ClCompile Include="GameUiNpc.cpp" />
+    <ClCompile Include="GameUiPages.cpp" />
     <ClCompile Include="GameUiPlayerHud.cpp" />
     <ClCompile Include="GameUiServices.cpp" />
     <ClCompile Include="GameUiTrade.cpp" />
@@ -263,7 +264,6 @@
     <ClCompile Include="NpcSystem.cpp" />
     <ClCompile Include="PirateRaid.cpp" />
     <ClCompile Include="PlayerCombat.cpp" />
-    <ClCompile Include="PlayerCombatHud.cpp" />
     <ClCompile Include="PlayerCombatState.cpp" />
     <ClCompile Include="PlayerController.cpp" />
     <ClCompile Include="PlayerEconomy.cpp" />
@@ -279,6 +279,7 @@
     <ClCompile Include="SimpleGame.cpp" />
     <ClCompile Include="TownServiceActor.cpp" />
     <ClCompile Include="TradeRules.cpp" />
+    <ClCompile Include="UiLayout.cpp" />
     <ClCompile Include="World.cpp" />
     <ClCompile Include="WorldActors.cpp" />
     <ClCompile Include="WorldPosition.cpp" />
@@ -291,6 +292,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <None Include="Assets\UI\teal-brass\panel.png" />
+    <None Include="Assets\UI\teal-brass\compass.png" />
+    <None Include="Assets\UI\teal-brass\skin.json" />
     <None Include="Monitor\index.html" />
     <None Include="Shaders\World.vs" />
     <None Include="..\Tests\GameplayRegression.cpp" />
@@ -306,7 +310,7 @@
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>opengl32.lib;gdi32.lib;winmm.lib;Ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>opengl32.lib;gdi32.lib;winmm.lib;Ws2_32.lib;windowscodecs.lib;ole32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
@@ -326,6 +330,15 @@
   <Target Name="CopyWorldMonitor" AfterTargets="Build">
     <MakeDir Directories="$(TargetDir)Monitor" />
     <Copy SourceFiles="$(MSBuildProjectDirectory)\Monitor\index.html" DestinationFolder="$(TargetDir)Monitor" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyGameUiAssets" AfterTargets="Build">
+    <ItemGroup>
+      <GameUiAsset Include="$(MSBuildProjectDirectory)\Assets\UI\teal-brass\panel.png" />
+      <GameUiAsset Include="$(MSBuildProjectDirectory)\Assets\UI\teal-brass\compass.png" />
+      <GameUiAsset Include="$(MSBuildProjectDirectory)\Assets\UI\teal-brass\skin.json" />
+    </ItemGroup>
+    <MakeDir Directories="$(TargetDir)Assets\UI\teal-brass" />
+    <Copy SourceFiles="@(GameUiAsset)" DestinationFolder="$(TargetDir)Assets\UI\teal-brass" SkipUnchangedFiles="true" />
   </Target>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

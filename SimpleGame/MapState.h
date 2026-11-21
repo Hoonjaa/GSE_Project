@@ -1,8 +1,9 @@
 #pragma once
 #include "IslandLayout.h"
+#include <set>
 
 namespace MapState
 {
-    bool Visited(IslandKey key);
+    std::set<IslandKey> VisitedIslands();
     bool SaveVisited(IslandKey key);
 }

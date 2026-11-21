@@ -22,9 +22,19 @@ public:
     void Zoom(int direction);
     void MouseAttack(int x, int y, const Renderer& renderer);
 
-    bool CloseServiceMenu()
+    void Escape()
     {
-        return m_ui.CloseServiceMenu();
+        m_ui.Escape();
+    }
+
+    bool ExitRequested() const
+    {
+        return m_ui.ExitRequested();
+    }
+
+    void OpenTestPanel()
+    {
+        m_ui.OpenTestPanel();
     }
 
     void DebugSeaThreat(int kind);

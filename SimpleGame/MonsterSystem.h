@@ -27,6 +27,7 @@ public:
     void Prepare(const WorldPosition& camera, bool showStatus = true);
     void Attack(const WorldPosition& player, Vec3 aim, int damage);
     MonsterPopulation Population(IslandKey island) const;
+    bool AttackWarning(const WorldPosition& player) const;
 
 private:
     struct Group

@@ -30,6 +30,12 @@ public:
         Vec3 spawn);
     void Tick(float dt, const MonsterContext& context);
     bool TakeDamage(int damage);
+
+    bool AttackWarning() const
+    {
+        return health > 0 && m_windup > 0;
+    }
+
     void Render(Renderer& renderer, const ActorTransform& world) const override;
     void Overlay(Renderer& renderer, const ActorTransform& world) const override;
     const MonsterDefinition& definition;

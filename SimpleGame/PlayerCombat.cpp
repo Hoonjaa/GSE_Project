@@ -17,11 +17,6 @@ PlayerCombat::PlayerCombat(SceneGraph& scene, PlayerEconomy& economy) : m_scene(
     m_root = m_scene.Create<Actor>(NoActor, "플레이어 전투").Id();
     m_effectsRoot = m_scene.Create<Actor>(m_root, "전투 효과").Id();
     m_slash = m_scene.Create<SlashActor>(m_effectsRoot, m_meshes.slash).Id();
-    auto& hud = m_scene.Create<CallbackActor>(m_root, "레벨 상태 UI");
-    hud.overlay = [this](Renderer& renderer, const ActorTransform&)
-    {
-        Overlay(renderer);
-    };
     Notify("섬별 몬스터 미리보기 · 일반 4종과 에픽 1종 / 전리품·장비 자동 습득");
 }
 
@@ -69,9 +64,9 @@ void PlayerCombat::GainExperience(int amount)
         return;
     }
     m_xp += amount;
-    while (m_level < 20 && m_xp >= 40 + (m_level - 1) * 25)
+    while (m_level < 20 && m_xp >= ExperienceTarget())
     {
-        m_xp -= 40 + (m_level - 1) * 25;
+        m_xp -= ExperienceTarget();
         ++m_level;
         m_health = float(MaxHealth());
         Notify("레벨 업! " + std::to_string(m_level) + "레벨 · 공격력과 최대 체력이 증가했습니다.");
@@ -122,7 +117,7 @@ bool PlayerCombat::Attacking() const
     return slash && slash->Attacking();
 }
 
-void PlayerCombat::Prepare(const WorldPosition& camera, bool showHud)
+void PlayerCombat::Prepare(const WorldPosition& camera)
 {
     auto* slash = m_scene.Get<SlashActor>(m_slash);
     const float height = slash->transform.position.y;
@@ -135,7 +130,6 @@ void PlayerCombat::Prepare(const WorldPosition& camera, bool showHud)
             number->transform.position = number->location.RelativeTo(camera);
         }
     }
-    m_showHud = showHud;
 }
 
 void PlayerCombat::SetActiveRegion(const std::function<bool(const WorldPosition&)>& isActive)

@@ -84,9 +84,16 @@ public:
         return m_encounter;
     }
 
+    unsigned TentaclesRemaining() const;
+
     const std::string& Notice() const
     {
         return m_notice;
+    }
+
+    bool HasNotice() const
+    {
+        return m_noticeTime > 0;
     }
 
 private:
@@ -114,5 +121,6 @@ private:
     unsigned char m_lastEscape = 0;
     float m_health = 100, m_time = 0, m_krakenRoll = 0, m_stormRoll = 0;
     float m_escapeTime = 0, m_stormTime = 0, m_attackCooldown = 0;
+    float m_noticeTime = 0;
     std::string m_notice;
 };

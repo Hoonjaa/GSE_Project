@@ -1,6 +1,6 @@
 # 코드 구조와 파일별 역할
 
-기준일은 2026-11-10이다. 자체 소스 **58개**, 헤더 **49개**, 셰이더 7개이며 Dependencies와 빌드 산출물은 제외했다. 별도 회귀 검사 소스는 Tests/GameplayRegression.cpp다.
+기준일은 2026-11-21이다. 자체 소스 **59개**, 헤더 **49개**, 셰이더 7개이며 Dependencies와 빌드 산출물은 제외했다. 별도 회귀 검사 소스는 Tests/GameplayRegression.cpp다.
 
 ## 전체 연결
 
@@ -71,7 +71,8 @@ T 전환 때 GameState와 PlayerCombat::ProgressState, PlayerControlState 및 �
 | [FrameProfiler.cpp](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/FrameProfiler.cpp) · [FrameProfiler.h](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/FrameProfiler.h) | 완료 프레임/FPS·Draw Call·CPU update/render/swap·업로드·캐시 통계 기록. |
 | [GameUi.cpp](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/GameUi.cpp) · [GameUi.h](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/GameUi.h) | UI 바인딩, 입력 우선순위·모달 창 관리·후처리 표시 설정과 공통 HUD 클릭 소비. |
 | [GameUiCargo.cpp](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/GameUiCargo.cpp) | 선박 적재창 열기·닫기·품목 선택·적재/하역. |
-| [GameUiHud.cpp](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/GameUiHud.cpp) | 전체 HUD·해도·특산품/골드·테스트 섬 차트·조작 안내와 개별 창 표시 호출. |
+| [GameUiHud.cpp](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/GameUiHud.cpp) | 레벨·체력·경험치·골드, 원형 주변 해도, 육상 상호작용과 공격 경고, 메뉴 바로가기. |
+| [GameUiPages.cpp](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/GameUiPages.cpp) | 의뢰 일지, 전체 해도, 일시정지와 조작 안내, 테스트 맵 개발 도구. |
 | [GameUiInventory.cpp](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/GameUiInventory.cpp) | 4×4 가방 페이지와 장비 슬롯 배치, 클릭/키 선택·착용·해제·동료 해제. |
 | [GameUiNpc.cpp](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/GameUiNpc.cpp) | NPC 대화창과 수락·완료·영입·해제 입력. 상태 변경은 NpcState에 요청. |
 | [GameUiPlayerHud.cpp](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/GameUiPlayerHud.cpp) | 적재창 표시, 선박 체력·갑판 활동·해상 사건 안내. |
@@ -101,7 +102,6 @@ T 전환 때 GameState와 PlayerCombat::ProgressState, PlayerControlState 및 �
 | [NpcSystem.cpp](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/NpcSystem.cpp) · [NpcSystem.h](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/NpcSystem.h) | 로딩된 섬의 NPC Actor 배치·수명·이름표, 동료 추적/승선, 근처 NPC 선택과 대화 사실 구성. |
 | [PirateRaid.cpp](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/PirateRaid.cpp) · [PirateRaid.h](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/PirateRaid.h) | 해적 접현·승선 전투·40초 약탈/복귀·실패와 선박 간 충돌. |
 | [PlayerCombat.cpp](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/PlayerCombat.cpp) · [PlayerCombat.h](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/PlayerCombat.h) | 플레이어 HP·경험치·레벨·공통 강화·피격·회복·사망. 효과 위치를 WorldPosition으로 보관. |
-| [PlayerCombatHud.cpp](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/PlayerCombatHud.cpp) | 플레이어 체력·성장·강화·전투 알림 표시. 공통 HudLayout 영역 사용. |
 | [PlayerCombatState.cpp](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/PlayerCombatState.cpp) | 전투/성장 Snapshot·Restore와 전환 시 효과 정리. 파일 세이브 기능은 아님. |
 | [PlayerController.cpp](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/PlayerController.cpp) · [PlayerController.h](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/PlayerController.h) | 키 상태, 육상·갑판·타륜 이동, 승선/하선·해적선 왕복, 공격 시작·낚시·조작 상태 스냅샷. |
 | [PlayerEconomy.cpp](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/PlayerEconomy.cpp) · [PlayerEconomy.h](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/PlayerEconomy.h) | 골드·가방·선박 소유·적재품과 획득·적재/하역·해상 물건 손실. NPC 상태는 소유하지 않음. |
@@ -133,7 +133,7 @@ T 전환 때 GameState와 PlayerCombat::ProgressState, PlayerControlState 및 �
 | [KoreanText.h](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/KoreanText.h) | 한국어 공용 HUD·조작 안내·환영 문구. |
 | [NpcData.h](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/NpcData.h) | NPC 식별자·명명된 역할 상수·의뢰 상태·관계/기억 레코드. |
 | [RenderStatistics.h](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/RenderStatistics.h) | 실제 glDraw 호출을 계수하는 프레임 통계 구조. |
-| [UiLayout.h](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/UiLayout.h) | HUD 공통 사각 영역과 Contains. 그리기와 클릭 소비가 같은 정의를 사용한다. |
+| [UiLayout.h](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/UiLayout.h) · [UiLayout.cpp](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/UiLayout.cpp) | 화면 크기 스케일, 패널 9분할, 공통 버튼과 글자. 화면 그리기와 클릭 처리가 같은 레이아웃을 사용한다. |
 | [targetver.h](C:/Users/Leejaehoon/Documents/GitHub/GSE/BaseProject_SE/SimpleGame/targetver.h) | Windows SDK 대상 설정. |
 
 ## 수정 목적별 첫 파일

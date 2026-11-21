@@ -77,6 +77,8 @@ public:
 
     size_t VisibleChunks() const;
     bool WasVisited(IslandKey key) const;
+    std::map<IslandKey, bool> ChartIslands() const;
+    const IslandLayout* CachedIsland(IslandKey key) const;
     std::vector<const IslandLayout*> IslandLayouts() const;
 
 private:
@@ -108,6 +110,7 @@ private:
     CachedMesh m_house, m_palm, m_pier;
     std::map<Key, IslandChunk> m_chunks;
     std::map<IslandKey, ResidentIsland> m_islands;
+    std::set<IslandKey> m_visitHistory;
     std::deque<Key> m_pending;
     Key m_center = {0, 0};
     int m_radius = -1;

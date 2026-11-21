@@ -8,6 +8,7 @@
 #include <memory>
 #include <map>
 #include <utility>
+#include <array>
 
 // Immutable geometry shared by instances; GPU storage belongs to the renderer.
 class CachedMesh
@@ -53,6 +54,12 @@ struct BatchRecord
     size_t vertices, instances;
 };
 struct FontAtlas;
+
+enum class UiArt
+{
+    Panel,
+    Compass
+};
 
 // Y is height; the world lies in the X/Z plane.
 namespace Geometry
@@ -101,6 +108,21 @@ public:
         float animationTime);
     void BeginOverlay();
     void Panel(float x, float y, float width, float height, Color color);
+    void DimOverlay(float opacity);
+    void Sprite(
+        UiArt art,
+        float x,
+        float y,
+        float width,
+        float height,
+        Vec2 uvMin = {0, 0},
+        Vec2 uvMax = {1, 1});
+
+    bool HasArt(UiArt art) const
+    {
+        return m_uiArt[static_cast<unsigned>(art)] != 0;
+    }
+
     void Icon(const Mesh& unitMesh, float x, float y, float width, float height, Color tint = {1, 1, 1});
     // UTF-8 input; maxWidth enables wrapping, maxHeight bounds the text block (0 = viewport).
     void Text(
@@ -192,6 +214,7 @@ private:
     int m_width, m_height;
     float m_zoom = 28;
     Mesh m_batch;
+    std::array<GLuint, 2> m_uiArt{};
     std::unique_ptr<FontAtlas> m_font;
     bool m_fontReady = false;
     std::unique_ptr<PostProcessing> m_post;

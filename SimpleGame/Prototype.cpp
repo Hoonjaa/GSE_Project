@@ -61,7 +61,7 @@ void Prototype::CreateMapSystems()
         m_npcs.reset(new NpcSystem(m_scene, m_world, m_state.economy, m_state.npcs));
     }
     m_player.BindMarine(*m_marine);
-    m_ui.BindSystems(*m_marine, *m_npcs);
+    m_ui.BindSystems(*m_marine, *m_npcs, *m_monsters);
 }
 
 int Prototype::LoadRadius(float zoom) const
@@ -93,6 +93,11 @@ void Prototype::Key(unsigned char key, bool down)
     }
     if (!m_player.Press(key, down))
     {
+        return;
+    }
+    if (m_ui.Paused())
+    {
+        m_ui.Key(key);
         return;
     }
     if (key == 't')
@@ -166,7 +171,7 @@ void Prototype::Key(unsigned char key, bool down)
 
 void Prototype::Zoom(int direction)
 {
-    if (m_world.IsTestMap() && m_testOverview)
+    if (m_ui.Paused() || (m_world.IsTestMap() && m_testOverview))
     {
         return;
     }
@@ -178,17 +183,37 @@ void Prototype::MouseAttack(int x, int y, const Renderer& renderer)
     m_ui.SetView(
         renderer.Width(),
         renderer.Height(),
-        m_camera,
         m_world.IsTestMap() && m_testOverview,
         m_testIsland,
         m_frameAverage);
-    if (m_world.IsTestMap() && m_testOverview)
+    if (m_ui.PanelClick(
+            x,
+            y,
+            [this](UiAction action, unsigned value)
+            {
+                switch (action)
+                {
+                    case UiAction::TestIsland:
+                        SelectTestIsland(value);
+                        break;
+                    case UiAction::TestOverview:
+                        ToggleTestOverview();
+                        break;
+                    case UiAction::TestTravel:
+                        ToggleTestMap();
+                        break;
+                    case UiAction::Grid:
+                        m_grid = !m_grid;
+                        break;
+                    default:
+                        break;
+                }
+            }))
     {
         return;
     }
-    if (m_ui.ConsumesPointer(x, y))
+    if ((m_world.IsTestMap() && m_testOverview) || m_marine->Captured())
     {
-        m_ui.PanelClick(x, y);
         return;
     }
     const auto hit = renderer.ScreenGround(x, y, Aboard() ? m_player.CurrentDeckHeight() + .5f : .55f);
@@ -218,6 +243,11 @@ void Prototype::Update(double dt, int width, int height)
     if (dt > 0)
     {
         m_frameAverage += (dt - m_frameAverage) * .05;
+    }
+    if (m_ui.Paused())
+    {
+        m_ui.SetView(width, height, overview, m_testIsland, m_frameAverage);
+        return;
     }
     dt = (std::max)(0.0, (std::min)(dt, .05));
     const float frameDt = static_cast<float>(dt);
@@ -280,13 +310,13 @@ void Prototype::Update(double dt, int width, int height)
     {
         m_camera.Move(distance.x * follow, distance.z * follow);
     }
-    m_ui.SetView(width, height, m_camera, overview, m_testIsland, m_frameAverage);
+    m_ui.SetView(width, height, overview, m_testIsland, m_frameAverage);
 }
 
 void Prototype::Render(Renderer& r)
 {
     const bool overview = m_world.IsTestMap() && m_testOverview;
-    m_ui.SetView(r.Width(), r.Height(), m_camera, overview, m_testIsland, m_frameAverage);
+    m_ui.SetView(r.Width(), r.Height(), overview, m_testIsland, m_frameAverage);
     PrepareActors();
     m_marine->Prepare(m_camera, ShipActor().location);
     m_monsters->Prepare(m_camera, !overview && !m_ui.PlayerPanelOpen());
@@ -295,7 +325,7 @@ void Prototype::Render(Renderer& r)
     r.SetPostProcessing(m_ui.PostSettings());
     r.Begin(m_zoom);
     m_world.Prepare(m_camera, m_time, m_grid);
-    m_combat.Prepare(m_camera, m_ui.ShowCombatHud());
+    m_combat.Prepare(m_camera);
     m_scene.Render(r);
     r.BeginOverlay();
     m_scene.Overlay(r);
